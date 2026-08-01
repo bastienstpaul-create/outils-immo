@@ -54,6 +54,10 @@ export function buildImport(payload: AdPayload): ImportResult {
     patch.arrondissement = String(payload.cp)
     found.add('arrondissement')
   }
+  if (typeof payload.url === 'string' && /^https?:\/\//.test(payload.url)) {
+    patch.url = payload.url
+    found.add('url')
+  }
 
   return { adText, patch, found: [...found] }
 }

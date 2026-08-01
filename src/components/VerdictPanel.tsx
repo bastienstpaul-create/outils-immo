@@ -5,6 +5,8 @@ import type { Evaluation } from '../engine/rules.ts'
 type Props = {
   evaluation: Evaluation
   questions: string[]
+  onSave: () => void
+  dejaEnregistre: boolean
 }
 
 const VERDICT_CLASS: Record<Evaluation['verdict'], string> = {
@@ -13,7 +15,7 @@ const VERDICT_CLASS: Record<Evaluation['verdict'], string> = {
   STOP: 'verdict--stop',
 }
 
-export function VerdictPanel({ evaluation, questions }: Props) {
+export function VerdictPanel({ evaluation, questions, onSave, dejaEnregistre }: Props) {
   const { verdict, raisons, flags } = evaluation
 
   return (
@@ -26,6 +28,16 @@ export function VerdictPanel({ evaluation, questions }: Props) {
           ))}
         </ul>
       </div>
+
+      <button
+        type="button"
+        className={`btn verdict__save${dejaEnregistre ? '' : ' btn--primary'}`}
+        onClick={onSave}
+        disabled={dejaEnregistre}
+        title={dejaEnregistre ? 'Cette annonce est déjà dans tes coups de cœur' : undefined}
+      >
+        {dejaEnregistre ? '✓ Déjà dans mes coups de cœur' : '⭐ Enregistrer dans mes coups de cœur'}
+      </button>
 
       {flags.length > 0 && (
         <div className="flags">

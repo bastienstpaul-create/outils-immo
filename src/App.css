@@ -495,3 +495,129 @@
 .questions li {
   margin-bottom: 6px;
 }
+
+/* ---------- Champ lien (formulaire du bien) ---------- */
+.field-url {
+  margin-top: 12px;
+}
+
+/* ---------- Bouton d'enregistrement (sous le verdict) ---------- */
+.verdict__save {
+  margin: 14px 0 4px;
+  width: 100%;
+  justify-content: center;
+}
+
+/* ---------- Carnet de coups de cœur ---------- */
+.fav__count {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 6px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+.fav__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fav {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fav__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fav__verdict {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.fav__verdict--go {
+  background: var(--ok-bg);
+  color: var(--pos);
+}
+.fav__verdict--maybe {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.fav__verdict--stop {
+  background: var(--ko-bg);
+  color: var(--neg);
+}
+.fav__titre {
+  font-weight: 600;
+  color: var(--text-h);
+}
+.fav__date {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.fav__del {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.fav__del:hover {
+  color: var(--neg);
+  background: var(--ko-bg);
+}
+.fav__meta {
+  font-size: 13px;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+.fav__meta .pos {
+  color: var(--pos);
+}
+.fav__meta .neg {
+  color: var(--neg);
+}
+.fav__meta .muted,
+.fav__link.muted {
+  color: var(--muted);
+}
+.fav__link {
+  font-size: 12.5px;
+  color: var(--accent);
+  word-break: break-all;
+}
+.fav__note {
+  margin-top: 2px;
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 13px;
+}
+.fav__note:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}

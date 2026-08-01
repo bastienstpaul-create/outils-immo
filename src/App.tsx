@@ -11,6 +11,8 @@ import { extractFromText } from './parse/extract.ts'
 import { decodeBase64Utf8, buildImport } from './parse/importAd.ts'
 import type { AdPayload } from './parse/importAd.ts'
 import { buildQuestions } from './logic/questions.ts'
+import type { Favorite } from './state/favorites.ts'
+import { loadFavorites, saveFavorites } from './state/favorites.ts'
 
 import { ImportBar } from './components/ImportBar.tsx'
 import { AdInput } from './components/AdInput.tsx'
@@ -19,6 +21,7 @@ import { ParamsPanel } from './components/ParamsPanel.tsx'
 import { ScenarioTable } from './components/ScenarioTable.tsx'
 import { ProjectionPanel } from './components/ProjectionPanel.tsx'
 import { VerdictPanel } from './components/VerdictPanel.tsx'
+import { FavoritesPanel } from './components/FavoritesPanel.tsx'
 
 export default function App() {
   const [params, setParams] = useState<Params>(() => loadParams())
@@ -26,11 +29,17 @@ export default function App() {
   const [adText, setAdText] = useState('')
   const [found, setFound] = useState<(keyof Property)[]>([])
   const [nbTrouves, setNbTrouves] = useState<number | null>(null)
+  const [favorites, setFavorites] = useState<Favorite[]>(() => loadFavorites())
 
   // Persistance des paramètres calibrés (uniquement les paramètres, pas les annonces).
   useEffect(() => {
     saveParams(params)
   }, [params])
+
+  // Persistance du carnet de coups de cœur.
+  useEffect(() => {
+    saveFavorites(favorites)
+  }, [favorites])
 
   // Import 1-clic : le bookmarklet ouvre l'app avec les données de l'annonce dans le hash (#ad=…).
   useEffect(() => {
@@ -73,6 +82,36 @@ export default function App() {
     setNbTrouves(champsTrouves.length)
   }
 
+  // Un coup de cœur est identifié par son lien : on évite d'enregistrer deux fois la même annonce.
+  const urlNettoyee = property.url.trim()
+  const dejaEnregistre = urlNettoyee !== '' && favorites.some((f) => f.url === urlNettoyee)
+
+  function enregistrerFavori() {
+    if (dejaEnregistre) return
+    const best = evaluation.meilleurScenario
+    const fav: Favorite = {
+      id: crypto.randomUUID(),
+      savedAt: new Date().toISOString(),
+      url: urlNettoyee,
+      verdict: evaluation.verdict,
+      prix: property.prix,
+      surface: property.surface,
+      pieces: property.pieces,
+      arrondissement: property.arrondissement,
+      meilleurLabel: best?.def.label ?? null,
+      cfApresIS: best ? best.cfApresIS : null,
+      rdtBrut: best ? best.rdtBrut : null,
+      note: '',
+    }
+    setFavorites((prev) => [fav, ...prev])
+  }
+  function retirerFavori(id: string) {
+    setFavorites((prev) => prev.filter((f) => f.id !== id))
+  }
+  function modifierNote(id: string, note: string) {
+    setFavorites((prev) => prev.map((f) => (f.id === id ? { ...f, note } : f)))
+  }
+
   return (
     <div className="app">
       <header className="app__header">
@@ -96,7 +135,12 @@ export default function App() {
         </div>
 
         <div className="layout__results">
-          <VerdictPanel evaluation={evaluation} questions={questions} />
+          <VerdictPanel
+            evaluation={evaluation}
+            questions={questions}
+            onSave={enregistrerFavori}
+            dejaEnregistre={dejaEnregistre}
+          />
           <ScenarioTable
             scenarios={scenarios}
             params={params}
@@ -110,6 +154,8 @@ export default function App() {
           />
         </div>
       </main>
+
+      <FavoritesPanel favorites={favorites} onRemove={retirerFavori} onUpdateNote={modifierNote} />
 
       <ParamsPanel params={params} onChange={patchParams} onReset={resetParams} />
 

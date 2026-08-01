@@ -6,6 +6,7 @@ export type Property = {
   surface: number // surface habitable, m²
   pieces: number | null // nombre de pièces (T2 → 2)
   arrondissement: string // ex. "13008" (indicatif, sert au repérage en v2)
+  url: string // lien de l'annonce (rempli par l'import, éditable) — sert aux coups de cœur
   travaux: number // budget travaux estimé, €
   taxeFonciere: number // taxe foncière, €/an
   loyerActuel: number | null // loyer affiché dans l'annonce (info, non utilisé dans les calculs)
@@ -21,6 +22,7 @@ export const DEFAULT_PROPERTY: Property = {
   surface: 0,
   pieces: null,
   arrondissement: '',
+  url: '',
   travaux: 0,
   taxeFonciere: 0,
   loyerActuel: null,

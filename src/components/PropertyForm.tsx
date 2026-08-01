@@ -80,6 +80,16 @@ export function PropertyForm({ property, found, onChange }: Props) {
         />
       </div>
 
+      <div className="field-url">
+        <TextField
+          label="Lien de l'annonce"
+          value={property.url}
+          placeholder="https://www.leboncoin.fr/…"
+          highlight={isFound('url')}
+          onChange={(v) => onChange({ url: v })}
+        />
+      </div>
+
       <div className="checks">
         <CheckField
           label="Vendu occupé"

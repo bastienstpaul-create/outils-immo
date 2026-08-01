@@ -40,6 +40,9 @@ automatiquement si tu héberges l'app ailleurs.
   monte et la trésorerie s'érode. Les déficits des premières années sont reportés (report illimité en
   IS). On voit l'année où le CF après IS bascule — c'est elle, pas l'année 1, qui décide.
 - **Verdict** GO / À CREUSER / STOP, drapeaux rouges et 3 questions à poser à l'agent.
+- **Coups de cœur** : un bouton sous le verdict archive l'annonce (lien + verdict + meilleur
+  scénario + note libre) dans un carnet local (localStorage), consultable en bas de page et
+  exportable en CSV. Idéal pour mettre de côté les « À CREUSER ». Dédoublonnage par lien.
 - **Paramètres** entièrement éditables et mémorisés (localStorage) : loyers/m², taux, durée,
   frais, TF, vacance, amortissements, seuils. Rien n'est codé en dur.
 
