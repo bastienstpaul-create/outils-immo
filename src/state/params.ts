@@ -30,6 +30,9 @@ export type Params = {
   // --- Seuils de verdict ---
   seuilBanque: number // rendement brut minimal exigé par la banque, %
   seuilCashflow: number // cash-flow avant impôt minimal accepté, €/mois
+
+  // --- Projection ---
+  horizonProjection: number // nb d'années projetées pour l'effet ciseau
 }
 
 export const DEFAULT_PARAMS: Params = {
@@ -56,6 +59,8 @@ export const DEFAULT_PARAMS: Params = {
 
   seuilBanque: 10,
   seuilCashflow: 0,
+
+  horizonProjection: 10,
 }
 
 const STORAGE_KEY = 'oai.params.v1'
@@ -130,5 +135,9 @@ export const PARAM_GROUPS: ParamGroup[] = [
       { key: 'seuilBanque', label: 'Rendement brut mini (banque)', unit: '%', step: 0.5 },
       { key: 'seuilCashflow', label: 'Cash-flow avant impôt mini', unit: '€/mois', step: 50 },
     ],
+  },
+  {
+    title: 'Projection',
+    fields: [{ key: 'horizonProjection', label: 'Horizon de projection', unit: 'ans', step: 1 }],
   },
 ]

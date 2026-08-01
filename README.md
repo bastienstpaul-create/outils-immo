@@ -35,6 +35,10 @@ automatiquement si tu héberges l'app ailleurs.
   porte le kill-switch légal, se valide toujours manuellement).
 - **4 scénarios** recalculés en direct : en l'état nu, en l'état meublé, 2 lots, 3 lots.
   Colonnes brut → cash-flow avant impôt → cash-flow après IS de la SCI (amortissement + IS 15/25 %).
+- **Projection pluriannuelle (« effet ciseau »)** : le cash-flow après IS année par année, sur un
+  horizon paramétrable. Les intérêts déductibles baissent et les amortissements s'éteignent → l'IS
+  monte et la trésorerie s'érode. Les déficits des premières années sont reportés (report illimité en
+  IS). On voit l'année où le CF après IS bascule — c'est elle, pas l'année 1, qui décide.
 - **Verdict** GO / À CREUSER / STOP, drapeaux rouges et 3 questions à poser à l'agent.
 - **Paramètres** entièrement éditables et mémorisés (localStorage) : loyers/m², taux, durée,
   frais, TF, vacance, amortissements, seuils. Rien n'est codé en dur.
@@ -50,13 +54,13 @@ automatiquement si tu héberges l'app ailleurs.
 
 ```
 src/
-  engine/finance.ts   moteur déterministe (le SEUL endroit qui calcule la finance)
+  engine/finance.ts   moteur déterministe (le SEUL endroit qui calcule la finance) — année 1 + projection
   engine/rules.ts     drapeaux + verdict
   parse/extract.ts    pré-extraction regex de l'annonce
   logic/questions.ts  3 questions templatées
   state/params.ts     paramètres + défauts + persistance localStorage
   state/property.ts    faits du bien
-  components/          UI (une page)
+  components/          UI (une page) — dont ProjectionPanel (effet ciseau)
   App.tsx             câblage + recalcul live
 ```
 
@@ -64,7 +68,8 @@ src/
 
 - Les hypothèses de marché (loyer/m² nu & meublé, vacance) se **saisissent à la main**.
   La recherche web automatique avec source citée est prévue en **v2** (proxy + clé Anthropic).
-- L'IS est calculé sur **l'année 1** (intérêts max → IS mini). Voir la note « effet ciseau »
-  affichée dans le détail fiscal.
+- Le tableau des scénarios trie sur **l'année 1** (intérêts max → IS mini) ; la **projection
+  pluriannuelle** (effet ciseau) complète ce triage sur la durée. La projection suppose des loyers,
+  charges et taxe foncière **non indexés** (v2 : indexation optionnelle).
 - Photos / plan : **affichage seul**, aucune lecture automatique tant qu'il n'y a pas de LLM (v2).
 - Historique des annonces / détection des baisses de prix : **v3**.

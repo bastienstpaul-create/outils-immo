@@ -353,6 +353,53 @@
   color: #fff;
 }
 
+/* ---------- Projection (effet ciseau) ---------- */
+.proj__select {
+  margin-left: 6px;
+  font: inherit;
+  color: var(--text-h);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 3px 6px;
+}
+.proj__synth {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.proj__stat {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.proj__stat-lbl {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.proj__stat-val {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+.proj__unit {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted);
+}
+.proj__synth .pos {
+  color: var(--pos);
+}
+.proj__synth .neg {
+  color: var(--neg);
+}
+
 /* ---------- Verdict ---------- */
 .verdict {
   display: flex;

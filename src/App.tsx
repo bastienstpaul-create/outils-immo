@@ -17,6 +17,7 @@ import { AdInput } from './components/AdInput.tsx'
 import { PropertyForm } from './components/PropertyForm.tsx'
 import { ParamsPanel } from './components/ParamsPanel.tsx'
 import { ScenarioTable } from './components/ScenarioTable.tsx'
+import { ProjectionPanel } from './components/ProjectionPanel.tsx'
 import { VerdictPanel } from './components/VerdictPanel.tsx'
 
 export default function App() {
@@ -99,6 +100,12 @@ export default function App() {
           <ScenarioTable
             scenarios={scenarios}
             params={params}
+            meilleurKey={evaluation.meilleurScenario?.def.key ?? null}
+          />
+          <ProjectionPanel
+            property={property}
+            params={params}
+            scenarios={scenarios}
             meilleurKey={evaluation.meilleurScenario?.def.key ?? null}
           />
         </div>
