@@ -16,12 +16,14 @@ function buildBookmarklet(origin: string): string {
 
 export function ImportBar() {
   const ref = useRef<HTMLAnchorElement>(null)
-  const origin = window.location.origin
+  // Adresse complète de l'app, chemin de base inclus : en prod l'app est servie sous
+  // un sous-dossier (/outils-immo/), donc l'origine seule ne suffirait pas au favori.
+  const appUrl = (window.location.origin + import.meta.env.BASE_URL).replace(/\/$/, '')
 
   // href défini via le DOM pour contourner la neutralisation des URL "javascript:" par React.
   useEffect(() => {
-    if (ref.current) ref.current.setAttribute('href', buildBookmarklet(origin))
-  }, [origin])
+    if (ref.current) ref.current.setAttribute('href', buildBookmarklet(appUrl))
+  }, [appUrl])
 
   return (
     <section className="panel importbar">
