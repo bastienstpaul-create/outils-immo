@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 import type { Params } from './state/params.ts'
@@ -13,6 +13,7 @@ import type { AdPayload } from './parse/importAd.ts'
 import { buildQuestions } from './logic/questions.ts'
 import type { Favorite } from './state/favorites.ts'
 import { loadFavorites, saveFavorites } from './state/favorites.ts'
+import { isExtension, readIncomingAd, subscribeIncomingAd } from './platform/ext.ts'
 
 import { ImportBar } from './components/ImportBar.tsx'
 import { AdInput } from './components/AdInput.tsx'
@@ -41,24 +42,33 @@ export default function App() {
     saveFavorites(favorites)
   }, [favorites])
 
-  // Import 1-clic : le bookmarklet ouvre l'app avec les données de l'annonce dans le hash (#ad=…).
+  // Applique une annonce importée (depuis le bookmarklet web ou l'extension) aux champs.
+  const appliquerPayload = useCallback((payload: AdPayload) => {
+    const { adText: importedText, patch, found: foundImported } = buildImport(payload)
+    setAdText(importedText)
+    setProperty((prev) => ({ ...prev, ...patch }))
+    setFound(foundImported)
+    setNbTrouves(foundImported.length)
+  }, [])
+
+  // Import 1-clic. Web : le bookmarklet passe les données dans le hash (#ad=…).
+  // Extension : le service worker les dépose dans chrome.storage (au 1er rendu + à chaque annonce).
   useEffect(() => {
     const m = window.location.hash.match(/#ad=(.+)$/)
-    if (!m) return
-    try {
-      const payload = JSON.parse(decodeBase64Utf8(decodeURIComponent(m[1]))) as AdPayload
-      const { adText: importedText, patch, found: foundImported } = buildImport(payload)
-      setAdText(importedText)
-      setProperty((prev) => ({ ...prev, ...patch }))
-      setFound(foundImported)
-      setNbTrouves(foundImported.length)
-    } catch {
-      // payload illisible : on ignore, l'app reste utilisable en copier-coller.
-    } finally {
+    if (m) {
+      try {
+        appliquerPayload(JSON.parse(decodeBase64Utf8(decodeURIComponent(m[1]))) as AdPayload)
+      } catch {
+        // payload illisible : on ignore, l'app reste utilisable en copier-coller.
+      }
       // Nettoie le hash pour qu'un rechargement ne ré-importe pas.
       window.history.replaceState(null, '', window.location.pathname)
     }
-  }, [])
+    readIncomingAd().then((p) => {
+      if (p) appliquerPayload(p)
+    })
+    subscribeIncomingAd(appliquerPayload)
+  }, [appliquerPayload])
 
   // Recalcul live : toute modif de bien ou de paramètre recalcule tout, sans réseau.
   const scenarios = useMemo(() => computeAllScenarios(property, params), [property, params])
@@ -124,7 +134,7 @@ export default function App() {
 
       <main className="layout">
         <div className="layout__inputs">
-          <ImportBar />
+          {!isExtension && <ImportBar />}
           <AdInput
             texte={adText}
             onTexteChange={setAdText}

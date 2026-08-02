@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Qualification d'annonces — SCI à l'IS",
+  "version": "1.0.0",
+  "description": "Analyse une annonce ouverte (leboncoin / SeLoger) : verdict SCI à l'IS, scénarios, projection et coups de cœur. 100% local.",
+  "permissions": ["storage", "sidePanel", "scripting"],
+  "host_permissions": ["*://*.leboncoin.fr/*", "*://*.seloger.com/*"],
+  "action": {
+    "default_title": "Analyser l'annonce (SCI à l'IS)"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
