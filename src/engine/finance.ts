@@ -128,27 +128,58 @@ export function mensualiteCredit(capital: number, tauxAnnuelPct: number, dureeAn
   return (capital * i) / (1 - Math.pow(1 + i, -n))
 }
 
-// Intérêts payés année par année sur toute la durée du prêt (l'index 0 = année 1).
-// Le capital remboursé monte chaque année → les intérêts déductibles baissent :
-// c'est la première moitié de l'« effet ciseau ».
-export function interetsParAnnee(capital: number, tauxAnnuelPct: number, dureeAnnees: number): number[] {
+// Tableau d'amortissement annuel du prêt : source unique pour les intérêts déductibles
+// (effet ciseau) ET le capital restant dû (refinancement).
+export type EcheanceAnnuelle = {
+  annee: number // 1-indexée
+  interets: number // intérêts payés dans l'année
+  capitalRembourse: number // capital remboursé dans l'année
+  capitalRestant: number // capital restant dû en fin d'année
+}
+
+export function tableauAmortissement(
+  capital: number,
+  tauxAnnuelPct: number,
+  dureeAnnees: number,
+): EcheanceAnnuelle[] {
   const i = tauxAnnuelPct / 100 / 12
   const n = dureeAnnees * 12
   if (n <= 0) return []
   const pay = mensualiteCredit(capital, tauxAnnuelPct, dureeAnnees)
   let solde = capital
-  const annuel: number[] = []
+  const tableau: EcheanceAnnuelle[] = []
   for (let annee = 0; annee < dureeAnnees; annee++) {
     let interets = 0
+    let capitalRembourse = 0
     for (let m = 0; m < 12; m++) {
       if (annee * 12 + m >= n) break
       const interetMois = solde * i
+      const capMois = pay - interetMois
       interets += interetMois
-      solde -= pay - interetMois
+      capitalRembourse += capMois
+      solde -= capMois
     }
-    annuel.push(interets)
+    tableau.push({ annee: annee + 1, interets, capitalRembourse, capitalRestant: Math.max(0, solde) })
   }
-  return annuel
+  return tableau
+}
+
+// Intérêts payés année par année (index 0 = année 1) — dérivés du tableau d'amortissement.
+export function interetsParAnnee(capital: number, tauxAnnuelPct: number, dureeAnnees: number): number[] {
+  return tableauAmortissement(capital, tauxAnnuelPct, dureeAnnees).map((e) => e.interets)
+}
+
+// Capital restant dû après `apresNbAnnees` années remboursées.
+export function capitalRestantDu(
+  capital: number,
+  tauxAnnuelPct: number,
+  dureeAnnees: number,
+  apresNbAnnees: number,
+): number {
+  if (apresNbAnnees <= 0) return capital
+  const tableau = tableauAmortissement(capital, tauxAnnuelPct, dureeAnnees)
+  if (apresNbAnnees >= tableau.length) return 0
+  return tableau[apresNbAnnees - 1].capitalRestant
 }
 
 // Somme des intérêts payés sur les 12 premiers mois (année fiscale 1).
@@ -449,7 +480,15 @@ function assietteScenario(def: ScenarioDef, prop: Property, p: Params): Assiette
 
   const loyerEncaisseMois = loyerMensuel * (1 - p.tauxVacance / 100)
   const loyerEncaisseAn = loyerEncaisseMois * 12
-  const chargesAn = ((loyerEncaisseMois * p.chargesNonRecupPct) / 100) * 12
+  // Charges récurrentes : % global historique + postes détaillés (essentiels).
+  // La CFE ne s'applique qu'au meublé. Défauts à 0 → comportement inchangé si non renseignés.
+  const chargesAn =
+    ((loyerEncaisseMois * p.chargesNonRecupPct) / 100) * 12 +
+    p.pnoAn +
+    (loyerEncaisseAn * p.gliPct) / 100 +
+    (loyerEncaisseAn * p.fraisGestionPct) / 100 +
+    p.comptaAn +
+    (def.meuble ? p.cfeAn : 0)
 
   // --- Mensualité (crédit + assurance sur capital emprunté) ---
   const mCredit = mensualiteCredit(emprunt, p.tauxInteret, p.dureeAnnees)
@@ -757,5 +796,183 @@ export function computeComparaison(
   return {
     sciIs: computeAllScenarios(prop, p, 'sci-is'),
     nomPropre: computeAllScenarios(prop, p, 'nom-propre'),
+  }
+}
+
+// --- Module de sortie : revente (plus-value) & refinancement (equity) --------
+
+// Abattement pour durée de détention (plus-value des particuliers), en fraction 0..1.
+export function abattementPlusValueIR(annees: number): number {
+  if (annees <= 5) return 0
+  if (annees >= 22) return 1
+  return Math.min(1, ((annees - 5) * 6) / 100) // 6 %/an de la 6e à la 21e année
+}
+
+export function abattementPlusValuePS(annees: number): number {
+  if (annees <= 5) return 0
+  if (annees >= 30) return 1
+  if (annees <= 21) return ((annees - 5) * 1.65) / 100 // 1,65 %/an, 6e→21e
+  let pct = 16 * 1.65 + 1.6 // 6e→21e (26,4 %) + 22e année (1,6 %)
+  pct += (annees - 22) * 9 // 9 %/an de la 23e à la 30e
+  return Math.min(1, pct / 100)
+}
+
+// Surtaxe sur les plus-values immobilières élevées (CGI art. 1609 nonies G),
+// sur la plus-value imposable IR au-delà de 50 000 €. Barème lissé officiel.
+export function surtaxePlusValue(pv: number): number {
+  if (pv <= 50000) return 0
+  if (pv <= 60000) return 0.02 * pv - (60000 - pv) * 0.05
+  if (pv <= 100000) return 0.02 * pv
+  if (pv <= 110000) return 0.03 * pv - (110000 - pv) * 0.1
+  if (pv <= 150000) return 0.03 * pv
+  if (pv <= 160000) return 0.04 * pv - (160000 - pv) * 0.15
+  if (pv <= 200000) return 0.04 * pv
+  if (pv <= 210000) return 0.05 * pv - (210000 - pv) * 0.2
+  if (pv <= 250000) return 0.05 * pv
+  if (pv <= 260000) return 0.06 * pv - (260000 - pv) * 0.25
+  return 0.06 * pv
+}
+
+// Amortissements cumulés (naïfs : chaque dotation prise chaque année jusqu'à sa durée).
+function amortissementsCumules(a: Assiette, p: Params, annees: number): number {
+  const bati = Math.min(annees, p.dureeAmortBati) * a.amortBatiAn
+  const travaux = Math.min(annees, p.dureeAmortTravaux) * a.amortTravauxAn
+  const mobilier = Math.min(annees, p.dureeAmortMobilier) * a.amortMobilierAn
+  return bati + travaux + mobilier
+}
+
+// Valeur estimée du bien à l'année N (valeur saisie sinon appréciation composée sur le prix).
+function valeurEstimee(prop: Property, annees: number): number {
+  if (prop.valeurReventeAttendue != null && prop.valeurReventeAttendue > 0) {
+    return prop.valeurReventeAttendue
+  }
+  return prop.prix * Math.pow(1 + (prop.tauxAppreciationAn || 0) / 100, annees)
+}
+
+export type ReventeResult = {
+  strategie: Strategy
+  annees: number
+  valeurRevente: number
+  capitalRestantDu: number
+  prixAcquisitionMajore: number // (particuliers) ou VNC (SCI IS)
+  plusValueBrute: number
+  abattementIR: number // fraction 0..1 (0 en IS)
+  abattementPS: number // fraction 0..1 (0 en IS)
+  impotIR: number // IR (particuliers) ou IS (société)
+  impotPS: number // PS (particuliers ; 0 en IS)
+  surtaxe: number
+  impotTotal: number
+  plusValueNette: number
+  produitNetVente: number // valeur − capital restant dû − impôt sur la plus-value
+}
+
+export function computeRevente(
+  def: ScenarioDef,
+  prop: Property,
+  p: Params,
+  strategy: Strategy,
+): ReventeResult {
+  const a = assietteScenario(def, prop, p)
+  const annees = Math.max(1, Math.round(prop.dureeDetentionRevente || 1))
+  const valeurRevente = valeurEstimee(prop, annees)
+  const crd = capitalRestantDu(a.emprunt, p.tauxInteret, p.dureeAnnees, annees)
+
+  if (strategy === 'sci-is') {
+    // Plus-value professionnelle : prix de cession − valeur nette comptable.
+    const coutRevient = prop.prix + a.travauxImmobilises + a.mobilierTotal
+    const amortCumule = Math.min(
+      amortissementsCumules(a, p, annees),
+      (prop.prix * p.quotePartAmortissable) / 100 + a.travauxImmobilises + a.mobilierTotal,
+    )
+    const vnc = coutRevient - amortCumule
+    const plusValueBrute = valeurRevente - vnc
+    const is = calculerIS(Math.max(0, plusValueBrute))
+    return {
+      strategie: strategy,
+      annees,
+      valeurRevente,
+      capitalRestantDu: crd,
+      prixAcquisitionMajore: vnc,
+      plusValueBrute,
+      abattementIR: 0,
+      abattementPS: 0,
+      impotIR: is,
+      impotPS: 0,
+      surtaxe: 0,
+      impotTotal: is,
+      plusValueNette: plusValueBrute - is,
+      produitNetVente: valeurRevente - crd - is,
+    }
+  }
+
+  // Plus-value des particuliers.
+  const fraisAcq = (prop.prix * p.fraisAcquisitionForfaitPct) / 100
+  const majoTravaux = Math.max(prop.travaux, annees > 5 ? (prop.prix * p.forfaitTravauxPvPct) / 100 : 0)
+  const prixAcquisitionMajore = prop.prix + fraisAcq + majoTravaux
+  const plusValueBrute = Math.max(0, valeurRevente - prixAcquisitionMajore)
+  const abIR = abattementPlusValueIR(annees)
+  const abPS = abattementPlusValuePS(annees)
+  const pvIR = plusValueBrute * (1 - abIR)
+  const pvPS = plusValueBrute * (1 - abPS)
+  const impotIR = (pvIR * p.tauxPvIR) / 100
+  const impotPS = (pvPS * p.tauxPrelevementsSociaux) / 100
+  const surtaxe = surtaxePlusValue(pvIR)
+  const impotTotal = impotIR + impotPS + surtaxe
+  return {
+    strategie: strategy,
+    annees,
+    valeurRevente,
+    capitalRestantDu: crd,
+    prixAcquisitionMajore,
+    plusValueBrute,
+    abattementIR: abIR,
+    abattementPS: abPS,
+    impotIR,
+    impotPS,
+    surtaxe,
+    impotTotal,
+    plusValueNette: plusValueBrute - impotTotal,
+    produitNetVente: valeurRevente - crd - impotTotal,
+  }
+}
+
+export type RefiResult = {
+  annee: number
+  valeurReevaluee: number
+  ltv: number
+  nouveauPret: number
+  capitalRestantDuAvant: number
+  fraisRefi: number
+  cashOut: number // liquidités extraites
+  apport: number
+  argentLaisse: number // apport initial − cash-out (négatif = tu récupères plus que ta mise)
+  nouvelleMensualite: number
+  ancienneMensualite: number
+}
+
+export function computeRefinancement(def: ScenarioDef, prop: Property, p: Params): RefiResult {
+  const a = assietteScenario(def, prop, p)
+  const annee = Math.max(1, Math.round(prop.anneeRefi || 1))
+  const valeurReevaluee = valeurEstimee(prop, annee)
+  const ltv = prop.refiLtvOverride != null && prop.refiLtvOverride > 0 ? prop.refiLtvOverride : p.refiLtv
+  const nouveauPret = (valeurReevaluee * ltv) / 100
+  const crd = capitalRestantDu(a.emprunt, p.tauxInteret, p.dureeAnnees, annee)
+  const fraisRefi = (nouveauPret * p.refiFraisPct) / 100
+  const cashOut = nouveauPret - crd - fraisRefi
+  const nouvelleMensualite =
+    mensualiteCredit(nouveauPret, p.tauxInteretRefi, p.dureeAnnees) +
+    (nouveauPret * p.tauxAssurance) / 100 / 12
+  return {
+    annee,
+    valeurReevaluee,
+    ltv,
+    nouveauPret,
+    capitalRestantDuAvant: crd,
+    fraisRefi,
+    cashOut,
+    apport: a.apport,
+    argentLaisse: a.apport - cashOut,
+    nouvelleMensualite,
+    ancienneMensualite: a.mensualite,
   }
 }

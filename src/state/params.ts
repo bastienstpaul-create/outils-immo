@@ -36,6 +36,23 @@ export type Params = {
   abattementMicroFoncier: number // abattement forfaitaire micro-foncier, %
   abattementMicroBic: number // abattement forfaitaire micro-BIC, %
 
+  // --- Sortie / plus-value ---
+  fraisAcquisitionForfaitPct: number // frais d'acquisition forfaitaires (plus-value), % du prix
+  forfaitTravauxPvPct: number // forfait travaux (plus-value, détention > 5 ans), % du prix
+  tauxPvIR: number // taux IR de la plus-value des particuliers, %
+
+  // --- Refinancement ---
+  refiLtv: number // quotité de financement au refi, %
+  refiFraisPct: number // frais de refinancement, % du nouveau prêt
+  tauxInteretRefi: number // taux du nouveau prêt au refi, %
+
+  // --- Charges détaillées (essentielles) ---
+  pnoAn: number // assurance propriétaire non occupant, €/an
+  gliPct: number // assurance loyers impayés, % du loyer encaissé
+  fraisGestionPct: number // frais de gestion locative, % du loyer encaissé
+  comptaAn: number // comptabilité (LMNP réel / SCI IS), €/an
+  cfeAn: number // cotisation foncière des entreprises (meublé), €/an
+
   // --- Seuils de verdict ---
   seuilBanque: number // rendement brut minimal exigé par la banque, %
   seuilCashflow: number // cash-flow avant impôt minimal accepté, €/mois
@@ -73,6 +90,20 @@ export const DEFAULT_PARAMS: Params = {
   seuilMicroBic: 77700,
   abattementMicroFoncier: 30,
   abattementMicroBic: 50,
+
+  fraisAcquisitionForfaitPct: 7.5,
+  forfaitTravauxPvPct: 15,
+  tauxPvIR: 19,
+
+  refiLtv: 80,
+  refiFraisPct: 1.0,
+  tauxInteretRefi: 3.5,
+
+  pnoAn: 0,
+  gliPct: 0,
+  fraisGestionPct: 0,
+  comptaAn: 0,
+  cfeAn: 0,
 
   seuilBanque: 10,
   seuilCashflow: 0,
@@ -138,6 +169,16 @@ export const PARAM_GROUPS: ParamGroup[] = [
     ],
   },
   {
+    title: 'Charges (détail)',
+    fields: [
+      { key: 'pnoAn', label: 'Assurance PNO', unit: '€/an', step: 20 },
+      { key: 'gliPct', label: 'Assurance loyers impayés (GLI)', unit: '% du loyer', step: 0.5 },
+      { key: 'fraisGestionPct', label: 'Frais de gestion locative', unit: '% du loyer', step: 0.5 },
+      { key: 'comptaAn', label: 'Comptabilité', unit: '€/an', step: 50 },
+      { key: 'cfeAn', label: 'CFE (meublé)', unit: '€/an', step: 50 },
+    ],
+  },
+  {
     title: "Fiscalité (SCI à l'IS / amortissements)",
     fields: [
       { key: 'quotePartAmortissable', label: 'Quote-part bâti amortissable', unit: '% du prix', step: 1 },
@@ -163,6 +204,22 @@ export const PARAM_GROUPS: ParamGroup[] = [
     fields: [
       { key: 'seuilBanque', label: 'Rendement brut mini (banque)', unit: '%', step: 0.5 },
       { key: 'seuilCashflow', label: 'Cash-flow avant impôt mini', unit: '€/mois', step: 50 },
+    ],
+  },
+  {
+    title: 'Sortie / plus-value',
+    fields: [
+      { key: 'tauxPvIR', label: 'Taux IR plus-value', unit: '%', step: 1 },
+      { key: 'fraisAcquisitionForfaitPct', label: 'Frais acquisition (forfait)', unit: '% du prix', step: 0.5 },
+      { key: 'forfaitTravauxPvPct', label: 'Forfait travaux (> 5 ans)', unit: '% du prix', step: 1 },
+    ],
+  },
+  {
+    title: 'Refinancement',
+    fields: [
+      { key: 'refiLtv', label: 'Quotité de refinancement (LTV)', unit: '%', step: 1 },
+      { key: 'refiFraisPct', label: 'Frais de refinancement', unit: '% du prêt', step: 0.1 },
+      { key: 'tauxInteretRefi', label: 'Taux du nouveau prêt', unit: '% / an', step: 0.05 },
     ],
   },
   {

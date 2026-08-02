@@ -23,8 +23,10 @@ import { ParamsPanel } from './components/ParamsPanel.tsx'
 import { ScenarioTable } from './components/ScenarioTable.tsx'
 import { ProjectionPanel } from './components/ProjectionPanel.tsx'
 import { ComparaisonPanel } from './components/ComparaisonPanel.tsx'
+import { ExitPanel } from './components/ExitPanel.tsx'
 import { VerdictPanel } from './components/VerdictPanel.tsx'
 import { FavoritesPanel } from './components/FavoritesPanel.tsx'
+import { FavoriDetail } from './components/FavoriDetail.tsx'
 
 const STRATEGIE_KEY = 'oai.strategie.v1'
 
@@ -38,6 +40,9 @@ export default function App() {
   const [strategie, setStrategie] = useState<Strategy>(
     () => (localStorage.getItem(STRATEGIE_KEY) as Strategy) || 'sci-is',
   )
+  // Navigation : page d'analyse, carnet (liste), ou détail d'un coup de cœur.
+  const [vue, setVue] = useState<'analyse' | 'carnet'>('analyse')
+  const [favoriOuvert, setFavoriOuvert] = useState<Favorite | null>(null)
 
   // Persistance des paramètres calibrés (uniquement les paramètres, pas les annonces).
   useEffect(() => {
@@ -132,15 +137,26 @@ export default function App() {
       rdtBrut: best ? best.rdtBrut : null,
       strategie,
       regimeLabel: best?.regimeLabel ?? null,
+      snapshot: { property, params, strategie },
       note: '',
     }
     setFavorites((prev) => [fav, ...prev])
   }
   function retirerFavori(id: string) {
     setFavorites((prev) => prev.filter((f) => f.id !== id))
+    setFavoriOuvert((cur) => (cur?.id === id ? null : cur))
   }
   function modifierNote(id: string, note: string) {
     setFavorites((prev) => prev.map((f) => (f.id === id ? { ...f, note } : f)))
+  }
+  // Charge un coup de cœur dans l'analyse en direct (écrase le bien/params/stratégie courants).
+  function chargerFavori(f: Favorite) {
+    if (!f.snapshot) return
+    setProperty(f.snapshot.property)
+    setParams(f.snapshot.params)
+    setStrategie(f.snapshot.strategie)
+    setFavoriOuvert(null)
+    setVue('analyse')
   }
 
   return (
@@ -150,27 +166,63 @@ export default function App() {
         <p>
           Colle une annonce, vérifie les faits, lis le verdict. Calcul déterministe, en direct et 100 % local.
         </p>
-        <div className="strat" role="group" aria-label="Stratégie d'acquisition">
-          <span className="strat__lbl">Stratégie</span>
-          <div className="strat__toggle">
-            <button
-              type="button"
-              className={`strat__opt${strategie === 'sci-is' ? ' strat__opt--on' : ''}`}
-              onClick={() => setStrategie('sci-is')}
-            >
-              SCI à l'IS
-            </button>
-            <button
-              type="button"
-              className={`strat__opt${strategie === 'nom-propre' ? ' strat__opt--on' : ''}`}
-              onClick={() => setStrategie('nom-propre')}
-            >
-              Nom propre
-            </button>
+        {vue === 'analyse' && !favoriOuvert && (
+          <div className="strat" role="group" aria-label="Stratégie d'acquisition">
+            <span className="strat__lbl">Stratégie</span>
+            <div className="strat__toggle">
+              <button
+                type="button"
+                className={`strat__opt${strategie === 'sci-is' ? ' strat__opt--on' : ''}`}
+                onClick={() => setStrategie('sci-is')}
+              >
+                SCI à l'IS
+              </button>
+              <button
+                type="button"
+                className={`strat__opt${strategie === 'nom-propre' ? ' strat__opt--on' : ''}`}
+                onClick={() => setStrategie('nom-propre')}
+              >
+                Nom propre
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </header>
 
+      <nav className="nav">
+        <button
+          type="button"
+          className={`nav__tab${vue === 'analyse' && !favoriOuvert ? ' nav__tab--on' : ''}`}
+          onClick={() => {
+            setFavoriOuvert(null)
+            setVue('analyse')
+          }}
+        >
+          Analyse
+        </button>
+        <button
+          type="button"
+          className={`nav__tab${vue === 'carnet' || favoriOuvert ? ' nav__tab--on' : ''}`}
+          onClick={() => {
+            setFavoriOuvert(null)
+            setVue('carnet')
+          }}
+        >
+          Mes coups de cœur{favorites.length > 0 ? ` (${favorites.length})` : ''}
+        </button>
+      </nav>
+
+      {favoriOuvert ? (
+        <FavoriDetail favori={favoriOuvert} onRetour={() => setFavoriOuvert(null)} onCharger={chargerFavori} />
+      ) : vue === 'carnet' ? (
+        <FavoritesPanel
+          favorites={favorites}
+          onRemove={retirerFavori}
+          onUpdateNote={modifierNote}
+          onOpen={setFavoriOuvert}
+        />
+      ) : (
+        <>
       <main className="layout">
         <div className="layout__inputs">
           {!isExtension && <ImportBar />}
@@ -210,12 +262,18 @@ export default function App() {
             strategie={strategie}
             meilleurKey={evaluation.meilleurScenario?.def.key ?? null}
           />
+          <ExitPanel
+            property={property}
+            params={params}
+            strategie={strategie}
+            meilleurKey={evaluation.meilleurScenario?.def.key ?? null}
+          />
         </div>
       </main>
 
-      <FavoritesPanel favorites={favorites} onRemove={retirerFavori} onUpdateNote={modifierNote} />
-
-      <ParamsPanel params={params} onChange={patchParams} onReset={resetParams} />
+          <ParamsPanel params={params} onChange={patchParams} onReset={resetParams} />
+        </>
+      )}
 
       <footer className="app__footer">
         v1 locale · aucune donnée ne quitte cet appareil · les hypothèses de marché (loyer/m², vacance)

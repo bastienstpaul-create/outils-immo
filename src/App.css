@@ -566,6 +566,23 @@
 .fav__titre {
   font-weight: 600;
   color: var(--text-h);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.fav__titre:hover {
+  color: var(--accent);
+}
+.fav__open {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
 }
 .fav__date {
   margin-left: auto;
@@ -750,4 +767,114 @@
   margin-top: 2px;
   width: 100%;
   justify-content: center;
+}
+
+/* ---------- Sous-titre de formulaire ---------- */
+.form__sub {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+  margin: 16px 0 10px;
+}
+
+/* ---------- Module de sortie ---------- */
+.exit__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-bottom: 10px;
+}
+@media (max-width: 620px) {
+  .exit__grid {
+    grid-template-columns: 1fr;
+  }
+}
+.exit__block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.exit__block h3 {
+  font-size: 14px;
+  margin-bottom: 10px;
+  color: var(--text-h);
+}
+.exit__hl {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 6px;
+}
+.exit__hl dt {
+  font-weight: 600;
+  color: var(--text-h) !important;
+}
+.exit__hl dd {
+  font-size: 15px !important;
+}
+.exit__note {
+  color: var(--muted);
+  font-size: 11.5px;
+  margin-top: 8px;
+}
+
+/* ---------- Navigation (onglets Analyse / Carnet) ---------- */
+.nav {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.nav__tab {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 9px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.nav__tab--on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ---------- Page détail d'un coup de cœur ---------- */
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.detail__bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.detail__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-right: auto;
+}
+.detail__title strong {
+  font-size: 16px;
+  color: var(--text-h);
+}
+.detail__date {
+  font-size: 12px;
+  color: var(--muted);
+}
+.detail__link {
+  font-size: 12.5px;
+  color: var(--accent);
+  word-break: break-all;
+  margin-top: -8px;
+}
+.detail__note {
+  font-size: 13px;
+  color: var(--text-h);
+  margin-top: -8px;
 }

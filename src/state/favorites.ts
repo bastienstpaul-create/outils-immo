@@ -3,6 +3,15 @@
 
 import type { Verdict } from '../engine/rules.ts'
 import type { Strategy } from '../engine/finance.ts'
+import type { Property } from './property.ts'
+import type { Params } from './params.ts'
+
+// Instantané complet permettant de rejouer l'analyse exacte au clic sur un coup de cœur.
+export type FavoriteSnapshot = {
+  property: Property
+  params: Params
+  strategie: Strategy
+}
 
 export type Favorite = {
   id: string
@@ -18,6 +27,7 @@ export type Favorite = {
   rdtBrut: number | null // % du meilleur scénario
   strategie?: Strategy // stratégie active à l'enregistrement (optionnel : anciens enregistrements)
   regimeLabel?: string | null // régime fiscal retenu (nom propre)
+  snapshot?: FavoriteSnapshot // instantané complet (absent des anciens enregistrements)
   note: string // annotation libre de l'utilisateur
 }
 
@@ -48,6 +58,7 @@ export function loadFavorites(): Favorite[] {
       rdtBrut: f.rdtBrut ?? null,
       strategie: f.strategie,
       regimeLabel: f.regimeLabel ?? null,
+      snapshot: f.snapshot,
       note: f.note ?? '',
     }))
   } catch {

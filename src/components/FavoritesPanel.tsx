@@ -9,6 +9,7 @@ type Props = {
   favorites: Favorite[]
   onRemove: (id: string) => void
   onUpdateNote: (id: string, note: string) => void
+  onOpen: (f: Favorite) => void
 }
 
 const VERDICT_MODIF: Record<Favorite['verdict'], string> = {
@@ -22,7 +23,7 @@ function formatDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('fr-FR')
 }
 
-export function FavoritesPanel({ favorites, onRemove, onUpdateNote }: Props) {
+export function FavoritesPanel({ favorites, onRemove, onUpdateNote, onOpen }: Props) {
   function exporterCsv() {
     // BOM ﻿ : Excel ouvre alors le CSV en UTF-8 (accents corrects).
     const blob = new Blob([`﻿${favoritesToCsv(favorites)}`], {
@@ -65,7 +66,10 @@ export function FavoritesPanel({ favorites, onRemove, onUpdateNote }: Props) {
                   <span className={`fav__verdict fav__verdict--${VERDICT_MODIF[f.verdict]}`}>
                     {f.verdict}
                   </span>
-                  <span className="fav__titre">{titre}</span>
+                  <button type="button" className="fav__titre" onClick={() => onOpen(f)} title="Ouvrir l'analyse complète">
+                    {titre}
+                    <span className="fav__open">Ouvrir ›</span>
+                  </button>
                   <span className="fav__date">{formatDate(f.savedAt)}</span>
                   <button
                     type="button"

@@ -40,9 +40,15 @@ automatiquement si tu héberges l'app ailleurs.
   monte et la trésorerie s'érode. Les déficits des premières années sont reportés (report illimité en
   IS). On voit l'année où le CF après IS bascule — c'est elle, pas l'année 1, qui décide.
 - **Verdict** GO / À CREUSER / STOP, drapeaux rouges et 3 questions à poser à l'agent.
-- **Coups de cœur** : un bouton sous le verdict archive l'annonce (lien + verdict + meilleur
-  scénario + note libre) dans un carnet local (localStorage), consultable en bas de page et
-  exportable en CSV. Idéal pour mettre de côté les « À CREUSER ». Dédoublonnage par lien.
+- **Stratégie SCI à l'IS ou nom propre** (bascule) : en nom propre, le meilleur régime est retenu
+  automatiquement par scénario (micro-foncier / foncier réel / micro-BIC / LMNP réel) — IR à ta TMI
+  + prélèvements sociaux 17,2 %. Un **encart compare** SCI IS vs nom propre pour trancher.
+- **Module de sortie** : revente (plus-value des particuliers avec abattements durée, ou plus-value
+  IS) et **refinancement** (extraction d'equity, boucle acheter-rénover-refinancer).
+- **Apport** et **charges détaillées** (PNO, GLI, gestion, comptabilité, CFE) paramétrables.
+- **Carnet de coups de cœur** : un bouton sous le verdict archive l'annonce avec un **instantané
+  complet de l'analyse** ; une page dédiée liste les coups de cœur, et un clic **rouvre l'analyse
+  complète**. Export CSV, note libre, dédoublonnage par lien. 100 % local (localStorage).
 - **Paramètres** entièrement éditables et mémorisés (localStorage) : loyers/m², taux, durée,
   frais, TF, vacance, amortissements, seuils. Rien n'est codé en dur.
 

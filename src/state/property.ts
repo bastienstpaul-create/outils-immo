@@ -16,6 +16,13 @@ export type Property = {
   copropriete: boolean // en copropriété
   divisionEnvisagee: boolean // on envisage de créer des lots
   nbLogementsImmeuble: number | null // si immeuble entier : nb de logements (préemption > 5)
+
+  // --- Hypothèses de sortie (revente / refinancement) ---
+  dureeDetentionRevente: number // durée de détention avant revente, années
+  valeurReventeAttendue: number | null // valeur estimée à la sortie, € (null → dérivée par appréciation)
+  tauxAppreciationAn: number // appréciation annuelle du bien, %/an
+  anneeRefi: number // année du refinancement (0 = pas de refi)
+  refiLtvOverride: number | null // LTV spécifique au refi, % (null → valeur des paramètres)
 }
 
 export const DEFAULT_PROPERTY: Property = {
@@ -32,4 +39,10 @@ export const DEFAULT_PROPERTY: Property = {
   copropriete: true, // en ville, la copropriété est le cas le plus fréquent
   divisionEnvisagee: false,
   nbLogementsImmeuble: null,
+
+  dureeDetentionRevente: 10,
+  valeurReventeAttendue: null,
+  tauxAppreciationAn: 0,
+  anneeRefi: 0,
+  refiLtvOverride: null,
 }

@@ -114,6 +114,38 @@ export function PropertyForm({ property, found, onChange }: Props) {
           onChange={(v) => onChange({ divisionEnvisagee: v })}
         />
       </div>
+
+      <h3 className="form__sub">Hypothèses de sortie</h3>
+      <div className="grid grid--facts">
+        <NumberField
+          label="Durée avant revente"
+          unit="ans"
+          step={1}
+          value={property.dureeDetentionRevente}
+          onChange={(v) => onChange({ dureeDetentionRevente: v })}
+        />
+        <NumberField
+          label="Valeur de revente"
+          unit="€ (0 = auto)"
+          step={5000}
+          value={property.valeurReventeAttendue ?? 0}
+          onChange={(v) => onChange({ valeurReventeAttendue: v || null })}
+        />
+        <NumberField
+          label="Appréciation /an"
+          unit="%"
+          step={0.5}
+          value={property.tauxAppreciationAn}
+          onChange={(v) => onChange({ tauxAppreciationAn: v })}
+        />
+        <NumberField
+          label="Année du refinancement"
+          unit="0 = aucun"
+          step={1}
+          value={property.anneeRefi}
+          onChange={(v) => onChange({ anneeRefi: v })}
+        />
+      </div>
     </section>
   )
 }
