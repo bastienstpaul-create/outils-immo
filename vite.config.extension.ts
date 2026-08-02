@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'node:path'
-import { copyFileSync, mkdirSync } from 'node:fs'
+import { copyFileSync, mkdirSync, cpSync } from 'node:fs'
 
 // Build de l'extension Chrome (MV3), séparé du build du site.
 // Produit le panneau latéral (le MÊME app React que le site) dans dist-extension/,
@@ -18,6 +18,7 @@ export default defineConfig({
         for (const f of ['manifest.json', 'background.js']) {
           copyFileSync(resolve('extension', f), resolve(out, f))
         }
+        cpSync(resolve('extension', 'icons'), resolve(out, 'icons'), { recursive: true })
       },
     },
   ],
