@@ -621,3 +621,133 @@
   outline-offset: -1px;
   border-color: var(--accent);
 }
+
+/* ---------- Bascule de stratégie (en-tête) ---------- */
+.strat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+.strat__lbl {
+  font-size: 13px;
+  color: var(--muted);
+}
+.strat__toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  padding: 2px;
+  gap: 2px;
+  background: var(--panel);
+}
+.strat__opt {
+  border: none;
+  background: transparent;
+  color: var(--text-h);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.strat__opt--on {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ---------- Badge régime (tableaux) ---------- */
+.scen__regime {
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.proj__regime {
+  color: var(--accent);
+  font-weight: 600;
+}
+.panel__strat-note {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin-bottom: 10px;
+}
+
+/* ---------- Encart de comparaison ---------- */
+.cmp__scope {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.cmp__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+@media (max-width: 560px) {
+  .cmp__grid {
+    grid-template-columns: 1fr;
+  }
+}
+.cmp__card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cmp__card--best {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.cmp__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cmp__titre {
+  font-weight: 700;
+  color: var(--text-h);
+}
+.cmp__regime {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: -4px;
+}
+.cmp__rows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.cmp__rows > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cmp__rows dt {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.cmp__rows dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+.cmp__rows dd.pos {
+  color: var(--pos);
+}
+.cmp__rows dd.neg {
+  color: var(--neg);
+}
+.cmp__btn {
+  margin-top: 2px;
+  width: 100%;
+  justify-content: center;
+}

@@ -138,12 +138,24 @@ export const PARAM_GROUPS: ParamGroup[] = [
     ],
   },
   {
-    title: "Fiscalité (SCI à l'IS)",
+    title: "Fiscalité (SCI à l'IS / amortissements)",
     fields: [
       { key: 'quotePartAmortissable', label: 'Quote-part bâti amortissable', unit: '% du prix', step: 1 },
       { key: 'dureeAmortBati', label: 'Amortissement bâti', unit: 'ans', step: 1 },
       { key: 'dureeAmortTravaux', label: 'Amortissement travaux', unit: 'ans', step: 1 },
       { key: 'dureeAmortMobilier', label: 'Amortissement mobilier', unit: 'ans', step: 1 },
+    ],
+  },
+  {
+    title: 'Fiscalité (nom propre)',
+    fields: [
+      { key: 'tmi', label: "Tranche marginale d'imposition", unit: '%', step: 1 },
+      { key: 'tauxPrelevementsSociaux', label: 'Prélèvements sociaux', unit: '%', step: 0.1 },
+      { key: 'plafondDeficitFoncier', label: 'Plafond déficit foncier', unit: '€/an', step: 100 },
+      { key: 'seuilMicroFoncier', label: 'Plafond micro-foncier', unit: '€', step: 500 },
+      { key: 'seuilMicroBic', label: 'Plafond micro-BIC', unit: '€', step: 1000 },
+      { key: 'abattementMicroFoncier', label: 'Abattement micro-foncier', unit: '%', step: 1 },
+      { key: 'abattementMicroBic', label: 'Abattement micro-BIC', unit: '%', step: 1 },
     ],
   },
   {

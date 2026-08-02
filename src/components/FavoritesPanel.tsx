@@ -81,9 +81,10 @@ export function FavoritesPanel({ favorites, onRemove, onUpdateNote }: Props) {
                 <div className="fav__meta">
                   {f.meilleurLabel ? (
                     <span>
-                      {f.meilleurLabel} · CF après IS{' '}
-                      <strong className={(f.cfApresIS ?? 0) >= 0 ? 'pos' : 'neg'}>
-                        {eurSigne(f.cfApresIS ?? 0)}/mois
+                      {f.meilleurLabel}
+                      {f.regimeLabel ? ` · ${f.regimeLabel}` : ''} · CF après impôt{' '}
+                      <strong className={(f.cfApresImpot ?? 0) >= 0 ? 'pos' : 'neg'}>
+                        {eurSigne(f.cfApresImpot ?? 0)}/mois
                       </strong>
                       {f.rdtBrut != null && <> · brut {pct(f.rdtBrut)}</>}
                     </span>

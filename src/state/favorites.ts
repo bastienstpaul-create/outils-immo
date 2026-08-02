@@ -2,6 +2,7 @@
 // « À CREUSER »). 100 % local, persisté en localStorage — rien ne quitte l'appareil.
 
 import type { Verdict } from '../engine/rules.ts'
+import type { Strategy } from '../engine/finance.ts'
 
 export type Favorite = {
   id: string
@@ -13,10 +14,16 @@ export type Favorite = {
   pieces: number | null
   arrondissement: string
   meilleurLabel: string | null // libellé du meilleur scénario retenu, si viable
-  cfApresIS: number | null // €/mois du meilleur scénario (après IS, année 1)
+  cfApresImpot: number | null // €/mois du meilleur scénario (après impôt, année 1)
   rdtBrut: number | null // % du meilleur scénario
+  strategie?: Strategy // stratégie active à l'enregistrement (optionnel : anciens enregistrements)
+  regimeLabel?: string | null // régime fiscal retenu (nom propre)
   note: string // annotation libre de l'utilisateur
 }
+
+// Ancien format d'enregistrement (avant la migration multi-stratégie) : le carnet ne
+// versionne pas sa clé, donc on tolère `cfApresIS` sur les enregistrements existants.
+type FavoriteStored = Partial<Favorite> & { cfApresIS?: number | null }
 
 const STORAGE_KEY = 'oai.favorites.v1'
 
@@ -25,7 +32,24 @@ export function loadFavorites(): Favorite[] {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? (parsed as Favorite[]) : []
+    if (!Array.isArray(parsed)) return []
+    // Normalisation : les anciens enregistrements portent `cfApresIS`.
+    return (parsed as FavoriteStored[]).map((f) => ({
+      id: f.id ?? crypto.randomUUID(),
+      savedAt: f.savedAt ?? new Date(0).toISOString(),
+      url: f.url ?? '',
+      verdict: f.verdict ?? 'À CREUSER',
+      prix: f.prix ?? 0,
+      surface: f.surface ?? 0,
+      pieces: f.pieces ?? null,
+      arrondissement: f.arrondissement ?? '',
+      meilleurLabel: f.meilleurLabel ?? null,
+      cfApresImpot: f.cfApresImpot ?? f.cfApresIS ?? null,
+      rdtBrut: f.rdtBrut ?? null,
+      strategie: f.strategie,
+      regimeLabel: f.regimeLabel ?? null,
+      note: f.note ?? '',
+    }))
   } catch {
     return []
   }
@@ -39,17 +63,21 @@ export function saveFavorites(list: Favorite[]): void {
   }
 }
 
+const STRATEGIE_CSV: Record<Strategy, string> = { 'sci-is': "SCI à l'IS", 'nom-propre': 'Nom propre' }
+
 // Export CSV téléchargeable, pour ranger le carnet hors de l'app.
 export function favoritesToCsv(list: Favorite[]): string {
   const head = [
     'Enregistré le',
     'Verdict',
+    'Stratégie',
+    'Régime',
     'Arrondissement',
     'Prix (€)',
     'Surface (m²)',
     'Pièces',
     'Meilleur scénario',
-    'CF après IS (€/mois)',
+    'CF après impôt (€/mois)',
     'Rdt brut (%)',
     'Note',
     'Lien',
@@ -63,12 +91,14 @@ export function favoritesToCsv(list: Favorite[]): string {
     [
       f.savedAt,
       f.verdict,
+      f.strategie ? STRATEGIE_CSV[f.strategie] : '',
+      f.regimeLabel ?? '',
       f.arrondissement,
       f.prix,
       f.surface,
       f.pieces,
       f.meilleurLabel,
-      f.cfApresIS == null ? '' : Math.round(f.cfApresIS),
+      f.cfApresImpot == null ? '' : Math.round(f.cfApresImpot),
       f.rdtBrut == null ? '' : f.rdtBrut.toFixed(1),
       f.note,
       f.url,

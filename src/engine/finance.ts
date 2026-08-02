@@ -203,16 +203,191 @@ const calcSciIs: TaxCalculator = (input, _ctx, prev) => {
   }
 }
 
-// Registre des calculateurs. Phase A : seul l'IS est implémenté ; les régimes du
-// nom propre (micro-foncier, foncier réel, micro-BIC, LMNP réel) arrivent en Phase B.
-export const TAX_CALCULATORS: Partial<Record<Regime, TaxCalculator>> = {
+// Purge les déficits reportés périmés (report limité à `dureeReport` ans).
+function purgeVintages(reports: Vintage[], anneeCourante: number, dureeReport: number): Vintage[] {
+  return reports.filter((v) => anneeCourante - v.annee < dureeReport)
+}
+
+// Impute un montant à couvrir sur des déficits reportés, du plus ancien au plus récent.
+function imputerReports(
+  reports: Vintage[],
+  montantACouvrir: number,
+): { impute: number; restants: Vintage[] } {
+  let reste = montantACouvrir
+  let impute = 0
+  const restants: Vintage[] = []
+  for (const v of reports) {
+    if (reste <= 0) {
+      restants.push(v)
+      continue
+    }
+    const pris = Math.min(v.montant, reste)
+    impute += pris
+    reste -= pris
+    const solde = v.montant - pris
+    if (solde > 0) restants.push({ annee: v.annee, montant: solde })
+  }
+  return { impute, restants }
+}
+
+// Impôt IR + PS sur une base positive (régimes nom propre).
+function impotIrPs(base: number, ctx: TaxContext): { ir: number; ps: number } {
+  if (base <= 0) return { ir: 0, ps: 0 }
+  return { ir: (base * ctx.tmi) / 100, ps: (base * ctx.tauxPS) / 100 }
+}
+
+// Micro-foncier (nu) : abattement forfaitaire 30 %, aucune charge/déficit.
+const calcMicroFoncier: TaxCalculator = (input, ctx) => {
+  const base = input.loyerEncaisseAn * (1 - ctx.abattementMicroFoncier / 100)
+  const { ir, ps } = impotIrPs(base, ctx)
+  return {
+    regime: 'micro-foncier',
+    regimeLabel: REGIME_LABELS['micro-foncier'],
+    resultatCourant: base,
+    baseImposable: base,
+    impotAn: ir + ps,
+    prelevementsSociaux: ps,
+    deficitImpute: 0,
+    deficitReporte: 0,
+    amortissementsAn: 0,
+    interetsAn: input.interetsAn,
+    state: { kind: 'micro' },
+  }
+}
+
+// Foncier réel (nu) : charges + intérêts déductibles, PAS d'amortissement.
+// Les intérêts s'imputent d'abord sur les loyers ; le déficit hors intérêts est
+// imputable sur le revenu global (plafond 10 700 €/an → économie d'IR), l'excédent et
+// le déficit d'intérêts sont reportés 10 ans sur les revenus fonciers.
+const calcFoncierReel: TaxCalculator = (input, ctx, prev) => {
+  const reportsAnterieurs = prev && prev.kind === 'foncier-reel' ? prev.reports : []
+  const reportsActifs = purgeVintages(reportsAnterieurs, input.annee, 10)
+
+  const L = input.loyerEncaisseAn
+  const I = input.interetsAn
+  const autresCharges = input.chargesRecurrentesAn + input.taxeFonciere + input.assuranceAn + input.travauxDeductiblesAn
+
+  const revenuApresInterets = L - I
+  let baseAvantReports = 0
+  let deficitInterets = 0
+  let deficitGlobalBrut = 0
+  if (revenuApresInterets <= 0) {
+    deficitInterets = -revenuApresInterets
+    deficitGlobalBrut = autresCharges
+  } else {
+    const net = revenuApresInterets - autresCharges
+    if (net >= 0) baseAvantReports = net
+    else deficitGlobalBrut = -net
+  }
+
+  // Imputer les reports fonciers antérieurs sur la base positive.
+  const { impute: deficitImpute, restants } = imputerReports(reportsActifs, baseAvantReports)
+  const base = baseAvantReports - deficitImpute
+
+  // Déficit hors intérêts imputable sur le revenu global (plafonné) → économie d'IR.
+  const deficitGlobalImpute = Math.min(deficitGlobalBrut, ctx.plafondDeficitFoncier)
+  const excedentGlobal = deficitGlobalBrut - deficitGlobalImpute
+  const nouveauReport = deficitInterets + excedentGlobal
+  const reports = nouveauReport > 0 ? [...restants, { annee: input.annee, montant: nouveauReport }] : restants
+
+  const economieImpotGlobal = (deficitGlobalImpute * ctx.tmi) / 100
+  const { ir, ps } = impotIrPs(base, ctx)
+  const deficitReporte = reports.reduce((s, v) => s + v.montant, 0)
+
+  return {
+    regime: 'foncier-reel',
+    regimeLabel: REGIME_LABELS['foncier-reel'],
+    resultatCourant: L - I - autresCharges,
+    baseImposable: base,
+    impotAn: ir + ps - economieImpotGlobal,
+    prelevementsSociaux: ps,
+    deficitImpute,
+    deficitReporte,
+    amortissementsAn: 0,
+    interetsAn: I,
+    state: { kind: 'foncier-reel', reports },
+  }
+}
+
+// Micro-BIC (meublé) : abattement forfaitaire 50 %, aucune charge/déficit.
+const calcMicroBic: TaxCalculator = (input, ctx) => {
+  const base = input.loyerEncaisseAn * (1 - ctx.abattementMicroBic / 100)
+  const { ir, ps } = impotIrPs(base, ctx)
+  return {
+    regime: 'micro-bic',
+    regimeLabel: REGIME_LABELS['micro-bic'],
+    resultatCourant: base,
+    baseImposable: base,
+    impotAn: ir + ps,
+    prelevementsSociaux: ps,
+    deficitImpute: 0,
+    deficitReporte: 0,
+    amortissementsAn: 0,
+    interetsAn: input.interetsAn,
+    state: { kind: 'micro' },
+  }
+}
+
+// LMNP réel (meublé) : charges + intérêts déductibles + amortissements, mais
+// l'amortissement NE PEUT PAS créer de déficit (report illimité en ARD). Le déficit
+// d'exploitation (charges/intérêts) est reportable 10 ans sur les seuls revenus BIC.
+const calcLmnpReel: TaxCalculator = (input, ctx, prev) => {
+  const prevState = prev && prev.kind === 'lmnp-reel' ? prev : { stockAmortDiffere: 0, reportsBic: [] }
+  const amortAnnee = input.amortBatiAn + input.amortTravauxAn + input.amortMobilierAn
+
+  const resultatAvantAmort =
+    input.loyerEncaisseAn - input.chargesRecurrentesAn - input.taxeFonciere - input.interetsAn - input.assuranceAn
+
+  let reportsBic = purgeVintages(prevState.reportsBic, input.annee, 10)
+  let stockAmortDiffere = prevState.stockAmortDiffere
+  let deficitImpute = 0
+  let amortUtilise = 0
+  let base = 0
+
+  if (resultatAvantAmort < 0) {
+    // Déficit BIC (hors amort) reporté 10 ans ; tout l'amortissement est différé.
+    reportsBic = [...reportsBic, { annee: input.annee, montant: -resultatAvantAmort }]
+    stockAmortDiffere += amortAnnee
+  } else {
+    const imp = imputerReports(reportsBic, resultatAvantAmort)
+    deficitImpute = imp.impute
+    reportsBic = imp.restants
+    const beneficeApresDeficit = resultatAvantAmort - deficitImpute
+    const amortDispo = amortAnnee + stockAmortDiffere
+    amortUtilise = Math.min(amortDispo, beneficeApresDeficit)
+    stockAmortDiffere = amortDispo - amortUtilise
+    base = beneficeApresDeficit - amortUtilise
+  }
+
+  const { ir, ps } = impotIrPs(base, ctx)
+  const deficitReporte = reportsBic.reduce((s, v) => s + v.montant, 0) + stockAmortDiffere
+
+  return {
+    regime: 'lmnp-reel',
+    regimeLabel: REGIME_LABELS['lmnp-reel'],
+    resultatCourant: resultatAvantAmort,
+    baseImposable: base,
+    impotAn: ir + ps,
+    prelevementsSociaux: ps,
+    deficitImpute,
+    deficitReporte,
+    amortissementsAn: amortUtilise,
+    interetsAn: input.interetsAn,
+    state: { kind: 'lmnp-reel', stockAmortDiffere, reportsBic },
+  }
+}
+
+// Registre des calculateurs fiscaux, un par régime.
+export const TAX_CALCULATORS: Record<Regime, TaxCalculator> = {
   'sci-is': calcSciIs,
+  'micro-foncier': calcMicroFoncier,
+  'foncier-reel': calcFoncierReel,
+  'micro-bic': calcMicroBic,
+  'lmnp-reel': calcLmnpReel,
 }
 
 function getCalculator(regime: Regime): TaxCalculator {
-  const calc = TAX_CALCULATORS[regime]
-  if (!calc) throw new Error(`Calculateur fiscal non implémenté pour le régime : ${regime}`)
-  return calc
+  return TAX_CALCULATORS[regime]
 }
 
 // Répartit la surface habitable en `nbLots` lots égaux, après perte des cloisons.
@@ -362,7 +537,9 @@ export function computeScenario(
 ): ScenarioResult {
   const a = assietteScenario(def, prop, p)
   const ctx = buildTaxContext(p, strategy)
-  const regime = regimesApplicables(strategy, def)[0]
+  // Le régime retenu doit être le même que celui de la projection (choix pluriannuel).
+  const regime =
+    strategy === 'sci-is' ? 'sci-is' : choisirRegime(def, prop, p, ctx, p.horizonProjection).regime
   const calc = getCalculator(regime)
 
   const rdtBrut = a.coutTotal > 0 ? ((a.loyerMensuel * 12) / a.coutTotal) * 100 : 0
@@ -443,16 +620,15 @@ export type Projection = {
   cfApresISMoisFin: number // @deprecated alias
 }
 
-export function projeterScenario(
+function projeterRegime(
   def: ScenarioDef,
   prop: Property,
   p: Params,
+  ctx: TaxContext,
+  regime: Regime,
   horizon: number,
-  strategy: Strategy = 'sci-is',
 ): Projection {
   const a = assietteScenario(def, prop, p)
-  const ctx = buildTaxContext(p, strategy)
-  const regime = regimesApplicables(strategy, def)[0]
   const calc = getCalculator(regime)
   const interetsAnnuels = interetsParAnnee(a.emprunt, p.tauxInteret, p.dureeAnnees)
 
@@ -517,5 +693,69 @@ export function projeterScenario(
     cfApresImpotMoisFin: moisFin,
     cfApresISMoisAn1: moisAn1,
     cfApresISMoisFin: moisFin,
+  }
+}
+
+// Choix du meilleur régime en nom propre : on projette chaque régime éligible sur
+// l'horizon et on retient celui qui maximise le cash-flow après impôt cumulé.
+export type ChoixRegime = {
+  regime: Regime
+  projection: Projection
+  alternatives: { regime: Regime; projection: Projection }[]
+}
+
+export function choisirRegime(
+  def: ScenarioDef,
+  prop: Property,
+  p: Params,
+  ctx: TaxContext,
+  horizon: number,
+): ChoixRegime {
+  const a = assietteScenario(def, prop, p)
+  // Le micro est écarté si les recettes dépassent son plafond ; le régime réel reste toujours candidat.
+  const candidats = regimesApplicables(ctx.strategy, def).filter((r) => {
+    if (r === 'micro-foncier') return a.loyerEncaisseAn <= ctx.seuilMicroFoncier
+    if (r === 'micro-bic') return a.loyerEncaisseAn <= ctx.seuilMicroBic
+    return true
+  })
+
+  const projections = candidats.map((regime) => ({
+    regime,
+    projection: projeterRegime(def, prop, p, ctx, regime, horizon),
+  }))
+
+  const estMicro = (r: Regime) => r === 'micro-foncier' || r === 'micro-bic'
+  projections.sort((x, y) => {
+    const d = y.projection.cfApresImpotCumule - x.projection.cfApresImpotCumule
+    if (Math.abs(d) > 1e-6) return d
+    // Égalité : préférer le régime réel (plus robuste dans la durée).
+    return (estMicro(x.regime) ? 1 : 0) - (estMicro(y.regime) ? 1 : 0)
+  })
+
+  const best = projections[0]
+  return { regime: best.regime, projection: best.projection, alternatives: projections.slice(1) }
+}
+
+// Projection publique : IS → régime unique ; nom propre → meilleur régime auto.
+export function projeterScenario(
+  def: ScenarioDef,
+  prop: Property,
+  p: Params,
+  horizon: number,
+  strategy: Strategy = 'sci-is',
+): Projection {
+  const ctx = buildTaxContext(p, strategy)
+  if (strategy === 'sci-is') return projeterRegime(def, prop, p, ctx, 'sci-is', horizon)
+  return choisirRegime(def, prop, p, ctx, horizon).projection
+}
+
+// Les deux stratégies calculées d'un coup, pour l'encart de comparaison.
+export function computeComparaison(
+  prop: Property,
+  p: Params,
+): { sciIs: ScenarioResult[]; nomPropre: ScenarioResult[] } {
+  return {
+    sciIs: computeAllScenarios(prop, p, 'sci-is'),
+    nomPropre: computeAllScenarios(prop, p, 'nom-propre'),
   }
 }

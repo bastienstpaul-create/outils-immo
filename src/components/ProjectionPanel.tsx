@@ -3,7 +3,7 @@
 // l'IS monter à mesure que les intérêts baissent et que l'amortissement s'éteint.
 
 import { useMemo, useState } from 'react'
-import type { ScenarioKey, ScenarioResult } from '../engine/finance.ts'
+import type { ScenarioKey, ScenarioResult, Strategy } from '../engine/finance.ts'
 import { SCENARIOS, projeterScenario } from '../engine/finance.ts'
 import type { Params } from '../state/params.ts'
 import type { Property } from '../state/property.ts'
@@ -13,10 +13,12 @@ type Props = {
   property: Property
   params: Params
   scenarios: ScenarioResult[]
+  strategie: Strategy
   meilleurKey: ScenarioKey | null
 }
 
-export function ProjectionPanel({ property, params, scenarios, meilleurKey }: Props) {
+export function ProjectionPanel({ property, params, scenarios, strategie, meilleurKey }: Props) {
+  const nomPropre = strategie === 'nom-propre'
   // Scénario projeté : le meilleur par défaut, sinon le premier non illégal.
   const parKey = useMemo(() => new Map(scenarios.map((s) => [s.def.key, s])), [scenarios])
   const defautKey =
@@ -27,8 +29,8 @@ export function ProjectionPanel({ property, params, scenarios, meilleurKey }: Pr
 
   const horizon = Math.max(1, Math.min(40, Math.round(params.horizonProjection || 1)))
   const proj = useMemo(
-    () => projeterScenario(def, property, params, horizon),
-    [def, property, params, horizon],
+    () => projeterScenario(def, property, params, horizon, strategie),
+    [def, property, params, horizon, strategie],
   )
 
   const renseigne = property.prix > 0 && property.surface > 0
@@ -37,7 +39,10 @@ export function ProjectionPanel({ property, params, scenarios, meilleurKey }: Pr
   return (
     <section className="panel">
       <div className="panel__head">
-        <h2>Projection · effet ciseau</h2>
+        <h2>
+          Projection · effet ciseau
+          {renseigne && !illegal && <span className="proj__regime"> · {proj.regimeLabel}</span>}
+        </h2>
         <label className="check check--inline">
           <span>Scénario</span>
           <select
@@ -67,26 +72,26 @@ export function ProjectionPanel({ property, params, scenarios, meilleurKey }: Pr
         <>
           <div className="proj__synth">
             <div className="proj__stat">
-              <span className="proj__stat-lbl">CF après IS · an 1 → an {horizon}</span>
+              <span className="proj__stat-lbl">CF après impôt · an 1 → an {horizon}</span>
               <span className="proj__stat-val">
-                <span className={proj.cfApresISMoisAn1 >= 0 ? 'pos' : 'neg'}>
-                  {eurSigne(proj.cfApresISMoisAn1)}
+                <span className={proj.cfApresImpotMoisAn1 >= 0 ? 'pos' : 'neg'}>
+                  {eurSigne(proj.cfApresImpotMoisAn1)}
                 </span>
                 {' → '}
-                <span className={proj.cfApresISMoisFin >= 0 ? 'pos' : 'neg'}>
-                  {eurSigne(proj.cfApresISMoisFin)}
+                <span className={proj.cfApresImpotMoisFin >= 0 ? 'pos' : 'neg'}>
+                  {eurSigne(proj.cfApresImpotMoisFin)}
                 </span>
                 <em className="proj__unit"> /mois</em>
               </span>
             </div>
             <div className="proj__stat">
-              <span className="proj__stat-lbl">L'IS démarre en</span>
+              <span className="proj__stat-lbl">L'impôt démarre en</span>
               <span className="proj__stat-val">
-                {proj.premiereAnneeIS ? `année ${proj.premiereAnneeIS}` : 'jamais sur l’horizon'}
+                {proj.premiereAnneeImpot ? `année ${proj.premiereAnneeImpot}` : 'jamais sur l’horizon'}
               </span>
             </div>
             <div className="proj__stat">
-              <span className="proj__stat-lbl">CF après IS négatif dès</span>
+              <span className="proj__stat-lbl">CF après impôt négatif dès</span>
               <span className="proj__stat-val">
                 {proj.premiereAnneeCfNegatif ? (
                   <span className="neg">année {proj.premiereAnneeCfNegatif}</span>
@@ -96,8 +101,8 @@ export function ProjectionPanel({ property, params, scenarios, meilleurKey }: Pr
               </span>
             </div>
             <div className="proj__stat">
-              <span className="proj__stat-lbl">IS cumulé sur {horizon} ans</span>
-              <span className="proj__stat-val">{eur(proj.isCumule)}</span>
+              <span className="proj__stat-lbl">Impôt cumulé sur {horizon} ans</span>
+              <span className="proj__stat-val">{eur(proj.impotCumule)}</span>
             </div>
           </div>
 
@@ -110,8 +115,9 @@ export function ProjectionPanel({ property, params, scenarios, meilleurKey }: Pr
                   <th>Amort.</th>
                   <th>Résultat courant</th>
                   <th>Base imposable</th>
-                  <th>IS /an</th>
-                  <th>CF après IS /an</th>
+                  {nomPropre && <th>dont PS</th>}
+                  <th>Impôt /an</th>
+                  <th>CF après impôt /an</th>
                 </tr>
               </thead>
               <tbody>
@@ -122,8 +128,11 @@ export function ProjectionPanel({ property, params, scenarios, meilleurKey }: Pr
                     <td className="muted">{eur(r.amortissements)}</td>
                     <td className={r.resultatCourant > 0 ? '' : 'muted'}>{eur(r.resultatCourant)}</td>
                     <td className={r.baseImposable > 0 ? '' : 'muted'}>{eur(r.baseImposable)}</td>
-                    <td className={r.is > 0 ? '' : 'muted'}>{eur(r.is)}</td>
-                    <td className={r.cfApresIS >= 0 ? 'pos' : 'neg'}>{eurSigne(r.cfApresIS)}</td>
+                    {nomPropre && (
+                      <td className="muted">{eur(r.prelevementsSociaux)}</td>
+                    )}
+                    <td className={r.impot > 0 ? '' : r.impot < 0 ? 'pos' : 'muted'}>{eur(r.impot)}</td>
+                    <td className={r.cfApresImpot >= 0 ? 'pos' : 'neg'}>{eurSigne(r.cfApresImpot)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -132,10 +141,11 @@ export function ProjectionPanel({ property, params, scenarios, meilleurKey }: Pr
 
           <p className="panel__hint">
             Hypothèses constantes et assumées : loyers, charges et taxe foncière <strong>non indexés</strong>.
-            La dérive vient donc uniquement de la fiscalité — intérêts déductibles qui baissent, dotations
-            d'amortissement qui s'éteignent — et les déficits des premières années sont reportés sur les
-            exercices bénéficiaires (report illimité en IS). Regarde l'année où le CF après IS bascule :
-            c'est elle, pas l'année 1, qui décide si le deal tient dans la durée.
+            La dérive vient de la fiscalité — intérêts déductibles qui baissent, amortissements qui s'éteignent.
+            {nomPropre
+              ? ' En nom propre, l’impôt = IR à ta TMI + prélèvements sociaux (17,2 %) ; déficits fonciers reportés 10 ans (plafond 10 700 € sur le revenu global), amortissement LMNP différé sans limite et ne créant jamais de déficit.'
+              : ' En SCI à l’IS, les déficits sont reportés sans limite sur les exercices bénéficiaires.'}{' '}
+            Regarde l'année où le CF après impôt bascule : c'est elle, pas l'année 1, qui décide.
           </p>
         </>
       )}

@@ -5,6 +5,7 @@ import type { Params } from './state/params.ts'
 import { loadParams, saveParams, DEFAULT_PARAMS } from './state/params.ts'
 import type { Property } from './state/property.ts'
 import { DEFAULT_PROPERTY } from './state/property.ts'
+import type { Strategy } from './engine/finance.ts'
 import { computeAllScenarios } from './engine/finance.ts'
 import { evaluate } from './engine/rules.ts'
 import { extractFromText } from './parse/extract.ts'
@@ -21,8 +22,11 @@ import { PropertyForm } from './components/PropertyForm.tsx'
 import { ParamsPanel } from './components/ParamsPanel.tsx'
 import { ScenarioTable } from './components/ScenarioTable.tsx'
 import { ProjectionPanel } from './components/ProjectionPanel.tsx'
+import { ComparaisonPanel } from './components/ComparaisonPanel.tsx'
 import { VerdictPanel } from './components/VerdictPanel.tsx'
 import { FavoritesPanel } from './components/FavoritesPanel.tsx'
+
+const STRATEGIE_KEY = 'oai.strategie.v1'
 
 export default function App() {
   const [params, setParams] = useState<Params>(() => loadParams())
@@ -31,11 +35,23 @@ export default function App() {
   const [found, setFound] = useState<(keyof Property)[]>([])
   const [nbTrouves, setNbTrouves] = useState<number | null>(null)
   const [favorites, setFavorites] = useState<Favorite[]>(() => loadFavorites())
+  const [strategie, setStrategie] = useState<Strategy>(
+    () => (localStorage.getItem(STRATEGIE_KEY) as Strategy) || 'sci-is',
+  )
 
   // Persistance des paramètres calibrés (uniquement les paramètres, pas les annonces).
   useEffect(() => {
     saveParams(params)
   }, [params])
+
+  // Persistance de la stratégie active.
+  useEffect(() => {
+    try {
+      localStorage.setItem(STRATEGIE_KEY, strategie)
+    } catch {
+      // localStorage indisponible : on ignore.
+    }
+  }, [strategie])
 
   // Persistance du carnet de coups de cœur.
   useEffect(() => {
@@ -70,8 +86,11 @@ export default function App() {
     subscribeIncomingAd(appliquerPayload)
   }, [appliquerPayload])
 
-  // Recalcul live : toute modif de bien ou de paramètre recalcule tout, sans réseau.
-  const scenarios = useMemo(() => computeAllScenarios(property, params), [property, params])
+  // Recalcul live : toute modif de bien, paramètre ou stratégie recalcule tout, sans réseau.
+  const scenarios = useMemo(
+    () => computeAllScenarios(property, params, strategie),
+    [property, params, strategie],
+  )
   const evaluation = useMemo(() => evaluate(scenarios, property, params), [scenarios, property, params])
   const questions = useMemo(() => buildQuestions(property), [property])
 
@@ -109,8 +128,10 @@ export default function App() {
       pieces: property.pieces,
       arrondissement: property.arrondissement,
       meilleurLabel: best?.def.label ?? null,
-      cfApresIS: best ? best.cfApresIS : null,
+      cfApresImpot: best ? best.cfApresImpot : null,
       rdtBrut: best ? best.rdtBrut : null,
+      strategie,
+      regimeLabel: best?.regimeLabel ?? null,
       note: '',
     }
     setFavorites((prev) => [fav, ...prev])
@@ -125,11 +146,29 @@ export default function App() {
   return (
     <div className="app">
       <header className="app__header">
-        <h1>Qualification d'annonces — SCI à l'IS · Marseille</h1>
+        <h1>Qualification d'annonces · Marseille</h1>
         <p>
-          Colle une annonce, vérifie les faits, lis le verdict. Calcul déterministe, sans plus-value :
-          uniquement du cash-flow.
+          Colle une annonce, vérifie les faits, lis le verdict. Calcul déterministe, en direct et 100 % local.
         </p>
+        <div className="strat" role="group" aria-label="Stratégie d'acquisition">
+          <span className="strat__lbl">Stratégie</span>
+          <div className="strat__toggle">
+            <button
+              type="button"
+              className={`strat__opt${strategie === 'sci-is' ? ' strat__opt--on' : ''}`}
+              onClick={() => setStrategie('sci-is')}
+            >
+              SCI à l'IS
+            </button>
+            <button
+              type="button"
+              className={`strat__opt${strategie === 'nom-propre' ? ' strat__opt--on' : ''}`}
+              onClick={() => setStrategie('nom-propre')}
+            >
+              Nom propre
+            </button>
+          </div>
+        </div>
       </header>
 
       <main className="layout">
@@ -151,15 +190,24 @@ export default function App() {
             onSave={enregistrerFavori}
             dejaEnregistre={dejaEnregistre}
           />
+          <ComparaisonPanel
+            property={property}
+            params={params}
+            meilleurKey={evaluation.meilleurScenario?.def.key ?? null}
+            strategieActive={strategie}
+            onChoisir={setStrategie}
+          />
           <ScenarioTable
             scenarios={scenarios}
             params={params}
+            strategie={strategie}
             meilleurKey={evaluation.meilleurScenario?.def.key ?? null}
           />
           <ProjectionPanel
             property={property}
             params={params}
             scenarios={scenarios}
+            strategie={strategie}
             meilleurKey={evaluation.meilleurScenario?.def.key ?? null}
           />
         </div>
