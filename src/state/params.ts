@@ -27,6 +27,15 @@ export type Params = {
   dureeAmortTravaux: number // durée d'amortissement des travaux, années
   dureeAmortMobilier: number // durée d'amortissement du mobilier, années
 
+  // --- Fiscalité nom propre (IR) ---
+  tmi: number // tranche marginale d'imposition, %
+  tauxPrelevementsSociaux: number // prélèvements sociaux, % (17,2)
+  plafondDeficitFoncier: number // plafond du déficit foncier imputable sur le revenu global, €/an
+  seuilMicroFoncier: number // plafond de recettes du micro-foncier, €
+  seuilMicroBic: number // plafond de recettes du micro-BIC, €
+  abattementMicroFoncier: number // abattement forfaitaire micro-foncier, %
+  abattementMicroBic: number // abattement forfaitaire micro-BIC, %
+
   // --- Seuils de verdict ---
   seuilBanque: number // rendement brut minimal exigé par la banque, %
   seuilCashflow: number // cash-flow avant impôt minimal accepté, €/mois
@@ -56,6 +65,14 @@ export const DEFAULT_PARAMS: Params = {
   dureeAmortBati: 30,
   dureeAmortTravaux: 10,
   dureeAmortMobilier: 6,
+
+  tmi: 30,
+  tauxPrelevementsSociaux: 17.2,
+  plafondDeficitFoncier: 10700,
+  seuilMicroFoncier: 15000,
+  seuilMicroBic: 77700,
+  abattementMicroFoncier: 30,
+  abattementMicroBic: 50,
 
   seuilBanque: 10,
   seuilCashflow: 0,

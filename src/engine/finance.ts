@@ -1,5 +1,11 @@
 // Moteur financier déterministe. Aucune dépendance, aucune I/O : entrées → chiffres.
 // C'est le seul endroit où l'arithmétique financière est faite.
+//
+// Architecture : `assietteScenario` calcule tout ce qui est indépendant de l'année
+// (coût, emprunt, loyer, charges, dotations d'amortissement). L'étage FISCAL est le
+// seul qui varie selon la stratégie / le régime : il est isolé dans des "calculateurs"
+// annuels purs (TAX_CALCULATORS), appelés par la projection ; l'année 1 est simplement
+// la 1re itération. Ainsi année 1 et projection ne peuvent jamais diverger.
 
 import type { Params } from '../state/params.ts'
 import type { Property } from '../state/property.ts'
@@ -23,24 +29,95 @@ export const SCENARIOS: ScenarioDef[] = [
 // Surface minimale légale d'un logement créé (art. L111-6-1 CCH).
 export const SURFACE_MINI_LEGALE = 14 // m²
 
-export type ScenarioResult = {
-  def: ScenarioDef
-  lots: number[] // surfaces des lots créés (m²)
-  lotIllegal: boolean // au moins un lot < 14 m² → scénario illégal, jamais retenu
+// --- Stratégie d'acquisition et régimes fiscaux -----------------------------
 
-  coutTotal: number
-  loyerMensuel: number // loyer théorique brut (avant vacance)
-  rdtBrut: number // %
-  mensualite: number // crédit + assurance, €/mois
-  cfAvantImpot: number // €/mois
-  cfApresIS: number // €/mois
+export type Strategy = 'sci-is' | 'nom-propre'
 
-  // Détail fiscal (année 1), pour transparence dans l'UI
-  resultatFiscal: number // €/an
-  is: number // €/an
-  amortissements: number // €/an
-  interetsAn1: number // €/an
+export type Regime = 'sci-is' | 'micro-foncier' | 'foncier-reel' | 'micro-bic' | 'lmnp-reel'
+
+export const REGIME_LABELS: Record<Regime, string> = {
+  'sci-is': "SCI à l'IS",
+  'micro-foncier': 'Micro-foncier',
+  'foncier-reel': 'Foncier réel',
+  'micro-bic': 'Micro-BIC',
+  'lmnp-reel': 'LMNP réel',
 }
+
+// Régimes candidats selon la stratégie et la configuration physique du scénario.
+// (Phase A : seul 'sci-is' possède un calculateur ; les autres arrivent en Phase B.)
+export function regimesApplicables(strategy: Strategy, def: ScenarioDef): Regime[] {
+  if (strategy === 'sci-is') return ['sci-is']
+  return def.meuble ? ['micro-bic', 'lmnp-reel'] : ['micro-foncier', 'foncier-reel']
+}
+
+// Contexte fiscal : constantes de calibration, identiques pour toutes les années.
+export type TaxContext = {
+  strategy: Strategy
+  tmi: number // taux marginal d'imposition IR, % (nom propre)
+  tauxPS: number // prélèvements sociaux, % (17,2)
+  plafondDeficitFoncier: number // 10 700 €
+  seuilMicroFoncier: number // 15 000 € de recettes
+  seuilMicroBic: number // 77 700 € de recettes
+  abattementMicroFoncier: number // 30 %
+  abattementMicroBic: number // 50 %
+}
+
+export function buildTaxContext(p: Params, strategy: Strategy): TaxContext {
+  return {
+    strategy,
+    tmi: p.tmi,
+    tauxPS: p.tauxPrelevementsSociaux,
+    plafondDeficitFoncier: p.plafondDeficitFoncier,
+    seuilMicroFoncier: p.seuilMicroFoncier,
+    seuilMicroBic: p.seuilMicroBic,
+    abattementMicroFoncier: p.abattementMicroFoncier,
+    abattementMicroBic: p.abattementMicroBic,
+  }
+}
+
+// Entrées annuelles dérivées de l'assiette, pour l'année Y.
+export type AnnualTaxInputs = {
+  annee: number // 1-indexée
+  loyerEncaisseAn: number
+  chargesRecurrentesAn: number
+  taxeFonciere: number
+  interetsAn: number // intérêts d'emprunt de l'année Y
+  assuranceAn: number // assurance emprunteur de l'année Y (0 après remboursement)
+  travauxDeductiblesAn: number // travaux passés en charge (foncier réel), Y=1 seulement
+  amortBatiAn: number
+  amortTravauxAn: number
+  amortMobilierAn: number
+}
+
+// État fiscal reporté d'une année sur l'autre (discriminé par régime).
+type Vintage = { annee: number; montant: number }
+
+export type TaxState =
+  | { kind: 'sci-is'; stockDeficit: number } // report illimité
+  | { kind: 'micro' } // aucun report
+  | { kind: 'foncier-reel'; reports: Vintage[] } // report 10 ans sur revenus fonciers
+  | { kind: 'lmnp-reel'; stockAmortDiffere: number; reportsBic: Vintage[] } // ARD illimité + déficit BIC 10 ans
+
+// Résultat fiscal d'une année, produit par un calculateur.
+export type TaxYearResult = {
+  regime: Regime
+  regimeLabel: string
+  resultatCourant: number // €/an, avant imputations (pour l'affichage)
+  baseImposable: number // €/an, après abattement/imputations (≥ 0)
+  impotAn: number // €/an total décaissé : (IR|IS) + PS ; peut être < 0 (économie déficit foncier global)
+  prelevementsSociaux: number // €/an, part PS
+  deficitImpute: number // €/an, déficit antérieur imputé cette année
+  deficitReporte: number // €/an, stock total reporté en fin d'année
+  amortissementsAn: number // €/an, dotations effectivement prises en compte (affichage)
+  interetsAn: number // €/an (affichage)
+  state: TaxState // à passer à l'année Y+1
+}
+
+export type TaxCalculator = (
+  input: AnnualTaxInputs,
+  ctx: TaxContext,
+  prev: TaxState | null,
+) => TaxYearResult
 
 // Mensualité d'un crédit amortissable classique.
 export function mensualiteCredit(capital: number, tauxAnnuelPct: number, dureeAnnees: number): number {
@@ -85,6 +162,59 @@ export function calculerIS(baseImposable: number): number {
   return 0.15 * Math.min(baseImposable, 42500) + 0.25 * Math.max(0, baseImposable - 42500)
 }
 
+// --- Calculateurs fiscaux (un par régime) -----------------------------------
+
+// SCI à l'IS : résultat = recettes − charges − TF − intérêts − assurance − amortissements.
+// Déficit reportable sans limite ; imputé d'abord sur les exercices bénéficiaires. Aucun PS.
+const calcSciIs: TaxCalculator = (input, _ctx, prev) => {
+  const stock = prev && prev.kind === 'sci-is' ? prev.stockDeficit : 0
+  const amort = input.amortBatiAn + input.amortTravauxAn + input.amortMobilierAn
+  const resultatCourant =
+    input.loyerEncaisseAn -
+    input.chargesRecurrentesAn -
+    input.taxeFonciere -
+    input.interetsAn -
+    input.assuranceAn -
+    amort
+
+  let stockDeficit = stock
+  let deficitImpute = 0
+  let baseImposable = 0
+  if (resultatCourant < 0) {
+    stockDeficit += -resultatCourant
+  } else {
+    deficitImpute = Math.min(stockDeficit, resultatCourant)
+    stockDeficit -= deficitImpute
+    baseImposable = resultatCourant - deficitImpute
+  }
+
+  return {
+    regime: 'sci-is',
+    regimeLabel: REGIME_LABELS['sci-is'],
+    resultatCourant,
+    baseImposable,
+    impotAn: calculerIS(baseImposable),
+    prelevementsSociaux: 0,
+    deficitImpute,
+    deficitReporte: stockDeficit,
+    amortissementsAn: amort,
+    interetsAn: input.interetsAn,
+    state: { kind: 'sci-is', stockDeficit },
+  }
+}
+
+// Registre des calculateurs. Phase A : seul l'IS est implémenté ; les régimes du
+// nom propre (micro-foncier, foncier réel, micro-BIC, LMNP réel) arrivent en Phase B.
+export const TAX_CALCULATORS: Partial<Record<Regime, TaxCalculator>> = {
+  'sci-is': calcSciIs,
+}
+
+function getCalculator(regime: Regime): TaxCalculator {
+  const calc = TAX_CALCULATORS[regime]
+  if (!calc) throw new Error(`Calculateur fiscal non implémenté pour le régime : ${regime}`)
+  return calc
+}
+
 // Répartit la surface habitable en `nbLots` lots égaux, après perte des cloisons.
 export function repartitionLots(surface: number, nbLots: number, pertesCloison: number): number[] {
   if (nbLots <= 1) return [surface]
@@ -95,14 +225,14 @@ export function repartitionLots(surface: number, nbLots: number, pertesCloison: 
 }
 
 // Assiette d'un scénario : toutes les grandeurs qui ne dépendent PAS de l'année.
-// Partagée par le calcul « année 1 » (computeScenario) et la projection pluriannuelle,
-// pour qu'ils ne puissent jamais diverger.
+// Partagée par le calcul « année 1 » et la projection, pour qu'ils ne divergent jamais.
 type Assiette = {
   isDivision: boolean
   lots: number[]
   lotIllegal: boolean
   coutTotal: number
-  emprunt: number
+  apport: number
+  emprunt: number // = coutTotal − apport
   loyerMensuel: number
   loyerEncaisseAn: number
   chargesAn: number
@@ -112,6 +242,10 @@ type Assiette = {
   amortBatiAn: number
   amortTravauxAn: number
   amortMobilierAn: number
+  // Ingrédients fiscaux supplémentaires (foncier réel / LMNP / plus-value).
+  travauxImmobilises: number // travaux + découpe
+  mobilierTotal: number
+  fraisAcquisition: number // notaire + bancaires
 }
 
 function assietteScenario(def: ScenarioDef, prop: Property, p: Params): Assiette {
@@ -119,13 +253,14 @@ function assietteScenario(def: ScenarioDef, prop: Property, p: Params): Assiette
   const lots = repartitionLots(prop.surface, def.nbLots, p.pertesCloison)
   const lotIllegal = isDivision && lots.some((ls) => ls < SURFACE_MINI_LEGALE)
 
-  // --- Coût total (financé à 110 %, sans apport) ---
+  // --- Coût total, puis emprunt = coût total − apport ---
   const fraisNotaire = (prop.prix * p.fraisNotairePct) / 100
   const fraisBancaires = (prop.prix * p.fraisBancairesPct) / 100
   const decoupe = isDivision ? p.coutDecoupe : 0
   const mobilierTotal = def.meuble ? p.mobilierParLot * def.nbLots : 0
   const coutTotal = prop.prix + fraisNotaire + fraisBancaires + prop.travaux + decoupe + mobilierTotal
-  const emprunt = coutTotal
+  const apport = Math.max(0, Math.min(prop.apport, coutTotal))
+  const emprunt = Math.max(0, coutTotal - apport)
 
   // --- Loyer brut mensuel théorique ---
   let loyerMensuel: number
@@ -141,15 +276,16 @@ function assietteScenario(def: ScenarioDef, prop: Property, p: Params): Assiette
   const loyerEncaisseAn = loyerEncaisseMois * 12
   const chargesAn = ((loyerEncaisseMois * p.chargesNonRecupPct) / 100) * 12
 
-  // --- Mensualité (crédit + assurance sur capital initial) ---
+  // --- Mensualité (crédit + assurance sur capital emprunté) ---
   const mCredit = mensualiteCredit(emprunt, p.tauxInteret, p.dureeAnnees)
   const mAssurance = (emprunt * p.tauxAssurance) / 100 / 12
   const mensualite = mCredit + mAssurance
   const assuranceAn = mAssurance * 12
 
   // --- Dotations d'amortissement (linéaires) ---
+  const travauxImmobilises = prop.travaux + decoupe
   const amortBatiAn = p.dureeAmortBati > 0 ? ((prop.prix * p.quotePartAmortissable) / 100) / p.dureeAmortBati : 0
-  const amortTravauxAn = p.dureeAmortTravaux > 0 ? (prop.travaux + decoupe) / p.dureeAmortTravaux : 0
+  const amortTravauxAn = p.dureeAmortTravaux > 0 ? travauxImmobilises / p.dureeAmortTravaux : 0
   const amortMobilierAn = def.meuble && p.dureeAmortMobilier > 0 ? mobilierTotal / p.dureeAmortMobilier : 0
 
   return {
@@ -157,6 +293,7 @@ function assietteScenario(def: ScenarioDef, prop: Property, p: Params): Assiette
     lots,
     lotIllegal,
     coutTotal,
+    apport,
     emprunt,
     loyerMensuel,
     loyerEncaisseAn,
@@ -166,51 +303,109 @@ function assietteScenario(def: ScenarioDef, prop: Property, p: Params): Assiette
     amortBatiAn,
     amortTravauxAn,
     amortMobilierAn,
+    travauxImmobilises,
+    mobilierTotal,
+    fraisAcquisition: fraisNotaire + fraisBancaires,
   }
 }
 
-export function computeScenario(def: ScenarioDef, prop: Property, p: Params): ScenarioResult {
-  const a = assietteScenario(def, prop, p)
-  const rdtBrut = a.coutTotal > 0 ? ((a.loyerMensuel * 12) / a.coutTotal) * 100 : 0
+// Construit les entrées fiscales de l'année Y à partir de l'assiette.
+function annualInputs(a: Assiette, p: Params, annee: number, interetsAn: number): AnnualTaxInputs {
+  const pretActif = annee <= p.dureeAnnees
+  return {
+    annee,
+    loyerEncaisseAn: a.loyerEncaisseAn,
+    chargesRecurrentesAn: a.chargesAn,
+    taxeFonciere: 0, // renseigné par l'appelant (dépend de prop)
+    interetsAn,
+    assuranceAn: pretActif ? a.assuranceAn : 0,
+    travauxDeductiblesAn: annee === 1 ? a.travauxImmobilises : 0,
+    amortBatiAn: annee <= p.dureeAmortBati ? a.amortBatiAn : 0,
+    amortTravauxAn: annee <= p.dureeAmortTravaux ? a.amortTravauxAn : 0,
+    amortMobilierAn: annee <= p.dureeAmortMobilier ? a.amortMobilierAn : 0,
+  }
+}
 
-  // Étape 2 : cash-flow avant impôt (mensuel).
+export type ScenarioResult = {
+  def: ScenarioDef
+  lots: number[] // surfaces des lots créés (m²)
+  lotIllegal: boolean // au moins un lot < 14 m² → scénario illégal, jamais retenu
+
+  strategie: Strategy
+  regime: Regime // régime retenu (le plus avantageux en nom propre)
+  regimeLabel: string
+
+  coutTotal: number
+  apport: number
+  emprunt: number // = coutTotal − apport
+  loyerMensuel: number // loyer théorique brut (avant vacance)
+  rdtBrut: number // %
+  mensualite: number // crédit + assurance, €/mois
+  cfAvantImpot: number // €/mois
+  cfApresImpot: number // €/mois
+  cfApresIS: number // @deprecated alias de cfApresImpot (migration Phase A→B)
+
+  // Détail fiscal (année 1), pour transparence dans l'UI
+  resultatFiscal: number // €/an
+  baseImposable: number // €/an
+  impot: number // €/an (IR|IS + PS)
+  is: number // @deprecated alias de impot
+  amortissements: number // €/an
+  interetsAn1: number // €/an
+}
+
+export function computeScenario(
+  def: ScenarioDef,
+  prop: Property,
+  p: Params,
+  strategy: Strategy = 'sci-is',
+): ScenarioResult {
+  const a = assietteScenario(def, prop, p)
+  const ctx = buildTaxContext(p, strategy)
+  const regime = regimesApplicables(strategy, def)[0]
+  const calc = getCalculator(regime)
+
+  const rdtBrut = a.coutTotal > 0 ? ((a.loyerMensuel * 12) / a.coutTotal) * 100 : 0
   const cfAvantImpot = a.loyerEncaisseAn / 12 - a.chargesAn / 12 - prop.taxeFonciere / 12 - a.mensualite
 
-  // Étape 3 : IS de l'année 1 (intérêts max → base fiscale mini → IS mini).
   const interetsAn1 = interetsPremiereAnnee(a.emprunt, p.tauxInteret, p.dureeAnnees)
-  const amortissements = a.amortBatiAn + a.amortTravauxAn + a.amortMobilierAn
-  const resultatFiscal =
-    a.loyerEncaisseAn - a.chargesAn - prop.taxeFonciere - interetsAn1 - a.assuranceAn - amortissements
-  const is = calculerIS(resultatFiscal)
-
-  // L'IS ampute la trésorerie ; l'amortissement, lui, n'est pas une sortie de cash.
-  const cfApresIS = cfAvantImpot - is / 12
+  const input = { ...annualInputs(a, p, 1, interetsAn1), taxeFonciere: prop.taxeFonciere }
+  const y1 = calc(input, ctx, null)
+  const cfApresImpot = cfAvantImpot - y1.impotAn / 12
 
   return {
     def,
     lots: a.lots,
     lotIllegal: a.lotIllegal,
+    strategie: strategy,
+    regime,
+    regimeLabel: y1.regimeLabel,
     coutTotal: a.coutTotal,
+    apport: a.apport,
+    emprunt: a.emprunt,
     loyerMensuel: a.loyerMensuel,
     rdtBrut,
     mensualite: a.mensualite,
     cfAvantImpot,
-    cfApresIS,
-    resultatFiscal,
-    is,
-    amortissements,
+    cfApresImpot,
+    cfApresIS: cfApresImpot,
+    resultatFiscal: y1.resultatCourant,
+    baseImposable: y1.baseImposable,
+    impot: y1.impotAn,
+    is: y1.impotAn,
+    amortissements: y1.amortissementsAn,
     interetsAn1,
   }
 }
 
-export function computeAllScenarios(prop: Property, p: Params): ScenarioResult[] {
-  return SCENARIOS.map((def) => computeScenario(def, prop, p))
+export function computeAllScenarios(prop: Property, p: Params, strategy: Strategy = 'sci-is'): ScenarioResult[] {
+  return SCENARIOS.map((def) => computeScenario(def, prop, p, strategy))
 }
 
 // --- Projection pluriannuelle (l'« effet ciseau ») ---------------------------
 // Hypothèses constantes et assumées : loyers, charges et taxe foncière NON indexés.
 // Le seul moteur de la dérive est fiscal : intérêts déductibles qui baissent +
-// dotations d'amortissement qui s'éteignent → base imposable et IS qui montent,
+// dotations d'amortissement qui s'éteignent → base imposable et impôt qui montent,
 // alors que la trésorerie avant impôt, elle, ne bouge pas.
 
 export type ProjectionAnnee = {
@@ -220,93 +415,107 @@ export type ProjectionAnnee = {
   resultatCourant: number // €/an, avant imputation des déficits reportés
   deficitImpute: number // €/an, déficit antérieur imputé cette année
   baseImposable: number // €/an, après imputation
-  is: number // €/an
+  prelevementsSociaux: number // €/an, part PS (nom propre ; 0 en IS)
+  deficitReporte: number // €/an, stock de déficit/ARD reporté en fin d'année
+  impot: number // €/an (IR|IS + PS)
+  is: number // @deprecated alias de impot
   cfAvantImpot: number // €/an (constant tant que le prêt court)
-  cfApresIS: number // €/an
+  cfApresImpot: number // €/an
+  cfApresIS: number // @deprecated alias de cfApresImpot
 }
 
 export type Projection = {
   def: ScenarioDef
+  regime: Regime
+  regimeLabel: string
   horizon: number // nb d'années projetées
   annees: ProjectionAnnee[]
-  premiereAnneeIS: number | null // 1re année où l'IS devient > 0
-  premiereAnneeCfNegatif: number | null // 1re année où le CF après IS passe < 0
-  isCumule: number // € cumulés sur l'horizon
-  cfApresISCumule: number // € cumulés sur l'horizon
-  cfApresISMoisAn1: number // €/mois année 1
-  cfApresISMoisFin: number // €/mois dernière année de l'horizon
+  premiereAnneeImpot: number | null // 1re année où l'impôt devient > 0
+  premiereAnneeIS: number | null // @deprecated alias
+  premiereAnneeCfNegatif: number | null // 1re année où le CF après impôt passe < 0
+  impotCumule: number // € cumulés sur l'horizon
+  isCumule: number // @deprecated alias
+  cfApresImpotCumule: number // € cumulés sur l'horizon
+  cfApresISCumule: number // @deprecated alias
+  cfApresImpotMoisAn1: number // €/mois année 1
+  cfApresImpotMoisFin: number // €/mois dernière année de l'horizon
+  cfApresISMoisAn1: number // @deprecated alias
+  cfApresISMoisFin: number // @deprecated alias
 }
 
-export function projeterScenario(def: ScenarioDef, prop: Property, p: Params, horizon: number): Projection {
+export function projeterScenario(
+  def: ScenarioDef,
+  prop: Property,
+  p: Params,
+  horizon: number,
+  strategy: Strategy = 'sci-is',
+): Projection {
   const a = assietteScenario(def, prop, p)
+  const ctx = buildTaxContext(p, strategy)
+  const regime = regimesApplicables(strategy, def)[0]
+  const calc = getCalculator(regime)
   const interetsAnnuels = interetsParAnnee(a.emprunt, p.tauxInteret, p.dureeAnnees)
 
   const annees: ProjectionAnnee[] = []
-  let stockDeficit = 0 // déficits antérieurs reportables (report illimité en IS)
-  let isCumule = 0
-  let cfApresISCumule = 0
-  let premiereAnneeIS: number | null = null
+  let state: TaxState | null = null
+  let impotCumule = 0
+  let cfApresImpotCumule = 0
+  let premiereAnneeImpot: number | null = null
   let premiereAnneeCfNegatif: number | null = null
 
   for (let y = 1; y <= horizon; y++) {
     const pretActif = y <= p.dureeAnnees
     const interets = interetsAnnuels[y - 1] ?? 0
-    const assuranceAn = pretActif ? a.assuranceAn : 0
+    const input = { ...annualInputs(a, p, y, interets), taxeFonciere: prop.taxeFonciere }
+    const r = calc(input, ctx, state)
+    state = r.state
 
-    // Dotations : chacune s'éteint une fois sa durée atteinte.
-    const amortBati = y <= p.dureeAmortBati ? a.amortBatiAn : 0
-    const amortTravaux = y <= p.dureeAmortTravaux ? a.amortTravauxAn : 0
-    const amortMobilier = def.meuble && y <= p.dureeAmortMobilier ? a.amortMobilierAn : 0
-    const amortissements = amortBati + amortTravaux + amortMobilier
-
-    const resultatCourant =
-      a.loyerEncaisseAn - a.chargesAn - prop.taxeFonciere - interets - assuranceAn - amortissements
-
-    // Report des déficits : un exercice déficitaire alimente le stock ;
-    // un exercice bénéficiaire l'impute d'abord, puis l'IS porte sur le reliquat.
-    let deficitImpute = 0
-    let baseImposable = 0
-    if (resultatCourant < 0) {
-      stockDeficit += -resultatCourant
-    } else {
-      deficitImpute = Math.min(stockDeficit, resultatCourant)
-      stockDeficit -= deficitImpute
-      baseImposable = resultatCourant - deficitImpute
-    }
-
-    const is = calculerIS(baseImposable)
     const mensualiteAn = pretActif ? a.mensualite * 12 : 0
     const cfAvantImpot = a.loyerEncaisseAn - a.chargesAn - prop.taxeFonciere - mensualiteAn
-    const cfApresIS = cfAvantImpot - is
+    const cfApresImpot = cfAvantImpot - r.impotAn
 
-    if (is > 0 && premiereAnneeIS === null) premiereAnneeIS = y
-    if (cfApresIS < 0 && premiereAnneeCfNegatif === null) premiereAnneeCfNegatif = y
+    if (r.impotAn > 0 && premiereAnneeImpot === null) premiereAnneeImpot = y
+    if (cfApresImpot < 0 && premiereAnneeCfNegatif === null) premiereAnneeCfNegatif = y
 
-    isCumule += is
-    cfApresISCumule += cfApresIS
+    impotCumule += r.impotAn
+    cfApresImpotCumule += cfApresImpot
 
     annees.push({
       annee: y,
       interets,
-      amortissements,
-      resultatCourant,
-      deficitImpute,
-      baseImposable,
-      is,
+      amortissements: r.amortissementsAn,
+      resultatCourant: r.resultatCourant,
+      deficitImpute: r.deficitImpute,
+      baseImposable: r.baseImposable,
+      prelevementsSociaux: r.prelevementsSociaux,
+      deficitReporte: r.deficitReporte,
+      impot: r.impotAn,
+      is: r.impotAn,
       cfAvantImpot,
-      cfApresIS,
+      cfApresImpot,
+      cfApresIS: cfApresImpot,
     })
   }
 
+  const moisAn1 = (annees[0]?.cfApresImpot ?? 0) / 12
+  const moisFin = (annees[annees.length - 1]?.cfApresImpot ?? 0) / 12
+
   return {
     def,
+    regime,
+    regimeLabel: REGIME_LABELS[regime],
     horizon,
     annees,
-    premiereAnneeIS,
+    premiereAnneeImpot,
+    premiereAnneeIS: premiereAnneeImpot,
     premiereAnneeCfNegatif,
-    isCumule,
-    cfApresISCumule,
-    cfApresISMoisAn1: (annees[0]?.cfApresIS ?? 0) / 12,
-    cfApresISMoisFin: (annees[annees.length - 1]?.cfApresIS ?? 0) / 12,
+    impotCumule,
+    isCumule: impotCumule,
+    cfApresImpotCumule,
+    cfApresISCumule: cfApresImpotCumule,
+    cfApresImpotMoisAn1: moisAn1,
+    cfApresImpotMoisFin: moisFin,
+    cfApresISMoisAn1: moisAn1,
+    cfApresISMoisFin: moisFin,
   }
 }

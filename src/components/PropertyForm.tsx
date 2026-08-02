@@ -56,6 +56,13 @@ export function PropertyForm({ property, found, onChange }: Props) {
           onChange={(v) => onChange({ travaux: v })}
         />
         <NumberField
+          label="Apport"
+          unit="€ (0 = 110 %)"
+          step={5000}
+          value={property.apport}
+          onChange={(v) => onChange({ apport: v })}
+        />
+        <NumberField
           label="Taxe foncière"
           unit="€/an"
           step={50}

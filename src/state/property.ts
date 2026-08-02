@@ -8,6 +8,7 @@ export type Property = {
   arrondissement: string // ex. "13008" (indicatif, sert au repérage en v2)
   url: string // lien de l'annonce (rempli par l'import, éditable) — sert aux coups de cœur
   travaux: number // budget travaux estimé, €
+  apport: number // apport personnel, € (0 = financement à 110 %)
   taxeFonciere: number // taxe foncière, €/an
   loyerActuel: number | null // loyer affiché dans l'annonce (info, non utilisé dans les calculs)
 
@@ -24,6 +25,7 @@ export const DEFAULT_PROPERTY: Property = {
   arrondissement: '',
   url: '',
   travaux: 0,
+  apport: 0,
   taxeFonciere: 0,
   loyerActuel: null,
   occupe: false,
